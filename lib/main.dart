@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:fuuuuck/firebase_options.dart';
 import 'package:fuuuuck/services/auth_service.dart'; // Import AuthService
 import 'package:fuuuuck/auth/auth_gate.dart';       // Import AuthGate
+import 'package:fuuuuck/services/beach_data_service.dart';
 
 // Theme colors based on Arbutus tree (example values)
 const Color arbutusBrown = Color(0xFF8B4513); // Saddle Brown
@@ -15,7 +16,6 @@ const Color arbutusCream = Color(0xFFF5F5DC); // Beige
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -23,13 +23,14 @@ void main() async {
   runApp(
     MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) => AuthService()), // Now providing AuthService
+        ChangeNotifierProvider(create: (context) => AuthService()),
+        // Add BeachDataService as a regular Provider (not ChangeNotifier as it doesn't change state it provides)
+        Provider<BeachDataService>(create: (context) => BeachDataService()),
       ],
-      child: const RootApp(), // Renamed MyApp to RootApp for clarity
+      child: const RootApp(),
     ),
   );
 }
-
 // Renamed MyApp to RootApp to clearly separate it from MyAppContent
 class RootApp extends StatelessWidget {
   const RootApp({super.key});
