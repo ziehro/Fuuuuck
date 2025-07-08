@@ -19,12 +19,15 @@ dependencies:
   cloud_firestore: ^5.6.11
   google_maps_flutter: ^2.12.3
   geolocator: ^12.0.0
+  geocoding: ^2.2.0           # <--- ADD THIS PACKAGE
+  dart_geohash: ^2.1.0
   firebase_auth: ^5.6.2
   http: ^1.4.0
   provider: ^6.1.5 # Use the latest stable version
   image_picker: ^1.1.2 # Use the latest stable version
   share_plus: ^11.0.0 # Use the latest stable version
   shared_preferences: ^2.5.3 # Use the latest stable version
+  firebase_storage: ^12.4.9
 
   path: ^1.9.1
   cupertino_icons: ^1.0.6

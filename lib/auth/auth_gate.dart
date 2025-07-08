@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:fuuuuck/services/auth_service.dart';
 import 'package:fuuuuck/auth/login_page.dart';
 import 'package:fuuuuck/auth/register_page.dart';
-import 'package:fuuuuck/main.dart'; // For MyApp content or directly show Scaffold
+
+// Placeholder imports for your screens (ensure these paths are correct)
 import 'package:fuuuuck/screens/scanner_screen.dart';
 import 'package:fuuuuck/screens/map_screen.dart';
 
@@ -34,7 +35,7 @@ class _AuthGateState extends State<AuthGate> {
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
-        // Show loading spinner
+        // Show loading spinner while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
@@ -45,7 +46,7 @@ class _AuthGateState extends State<AuthGate> {
 
         // User is logged in
         if (snapshot.hasData) {
-          return const MyAppContent(); // Your main app content (e.g., the Scaffold with tabs)
+          return const MyAppContent(); // Your main app content (the Scaffold with tabs)
         }
 
         // User is NOT logged in, show auth pages
@@ -59,7 +60,7 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-// Extract MyApp's Scaffold content into a separate widget
+// Extracted MyApp's Scaffold content into a separate widget
 class MyAppContent extends StatefulWidget {
   const MyAppContent({super.key});
 
@@ -71,9 +72,10 @@ class _MyAppContentState extends State<MyAppContent> {
   int _selectedIndex = 0; // Index for the currently selected tab
 
   // List of widgets for each tab
+  // Make sure the order here matches the BottomNavigationBarItem order
   static final List<Widget> _widgetOptions = <Widget>[
-    const ScannerScreen(), // Placeholder for Scanner
-    const MapScreen(), // Placeholder for Map
+    const MapScreen(),     // MAP is now the first tab
+    const ScannerScreen(), // Scanner is the second tab
   ];
 
   void _onItemTapped(int index) {
@@ -102,7 +104,7 @@ class _MyAppContentState extends State<MyAppContent> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await authService.signOut();
-              // No need to navigate, AuthGate will automatically redirect
+              // No need to navigate manually, AuthGate will automatically redirect
             },
             tooltip: 'Sign Out',
           ),
@@ -114,17 +116,19 @@ class _MyAppContentState extends State<MyAppContent> {
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt),
-            label: 'Scan',
+            icon: Icon(Icons.map), // Map icon for MapScreen
+            label: 'Map',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.map),
-            label: 'Map',
+            icon: Icon(Icons.camera_alt), // Camera icon for ScannerScreen
+            label: 'Scan',
           ),
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
+      // The FloatingActionButton for "Add New Beach" is now in MapScreen.dart,
+      // so it's removed from here to avoid duplication.
     );
   }
 }

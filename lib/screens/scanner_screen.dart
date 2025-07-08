@@ -6,21 +6,8 @@ import 'dart:io';
 import 'package:path/path.dart' show join;
 import 'package:fuuuuck/services/api/inaturalist_service.dart';
 import 'package:flutter/foundation.dart'; // For debugPrint
+import 'package:fuuuuck/models/confirmed_identification.dart';
 
-// Class to hold a confirmed identification
-class ConfirmedIdentification {
-  final String commonName;
-  final String scientificName;
-  final int taxonId;
-  final String imageUrl; // URL to the taxon's icon/photo if available from iNat
-
-  ConfirmedIdentification({
-    required this.commonName,
-    required this.scientificName,
-    required this.taxonId,
-    required this.imageUrl,
-  });
-}
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
