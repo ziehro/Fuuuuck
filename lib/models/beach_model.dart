@@ -7,7 +7,7 @@ class Beach {
   final String name;
   final double latitude;
   final double longitude;
-  final String geohash;
+  //final String geohash;
   final String country;
   final String province;
   final String municipality;
@@ -32,7 +32,7 @@ class Beach {
     required this.name,
     required this.latitude,
     required this.longitude,
-    required this.geohash,
+    //required this.geohash,
     required this.country,
     required this.province,
     required this.municipality,
@@ -65,7 +65,7 @@ class Beach {
       // Get latitude and longitude from the old database structure
       latitude: (data['latitude'] as num? ?? 0.0).toDouble(),
       longitude: (data['longitude'] as num? ?? 0.0).toDouble(),
-      geohash: data['geohash'] as String? ?? 'unknown',
+      //geohash: data['geohash'] as String? ?? 'unknown',
       country: data['country'] as String? ?? '',
       province: data['province'] as String? ?? '',
       municipality: data['municipality'] as String? ?? '',
@@ -96,7 +96,7 @@ class Beach {
       'name': name,
       'latitude': latitude,
       'longitude': longitude,
-      'geohash': geohash,
+      //'geohash': geohash,
       'country': country,
       'province': province,
       'municipality': municipality,
