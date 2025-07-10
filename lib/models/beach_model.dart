@@ -1,11 +1,12 @@
 // lib/models/beach_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fuuuuck/models/confirmed_identification.dart'; // To use ConfirmedIdentification for aggregated AI
+// Make sure this is imported correctly
 
 class Beach {
   final String id; // Firestore Document ID
   final String name;
-  final GeoPoint location; // Firestore GeoPoint type for efficient queries
+  final double latitude;
+  final double longitude;
   final String geohash;
   final String country;
   final String province;
@@ -15,27 +16,22 @@ class Beach {
   final Timestamp timestamp; // Creation timestamp
   final Timestamp lastAggregated; // When aggregation was last run
   final int totalContributions;
-
-  // Aggregated Data - Averages, Most Common, or Consolidated Lists
-  final Map<String, double> aggregatedMetrics; // For numerical/rating data (average)
-  final Map<String, String> aggregatedSingleChoices; // For single choice data (most common string)
-  final Map<String, List<String>> aggregatedMultiChoices; // For multi-choice data (consolidated list of common options)
-  final Map<String, List<String>> aggregatedTextItems; // For free text lists (consolidated unique items)
-
-  // Aggregated AI Data
-  final Map<String, int> identifiedFloraFaunaCounts; // Map of taxon name to count
-  final Map<String, double> identifiedRockTypesComposition; // Map of rock type to percentage
-  final Map<String, double> identifiedBeachComposition; // Map of composition type to percentage
-
-  // Educational/AI Generated Content
-  final String? aiGeneratedImageUrl; // URL to the AI-generated image of the beach
-  final List<String> discoveryQuestions; // Fixed questions for kids
+  final Map<String, double> aggregatedMetrics;
+  final Map<String, String> aggregatedSingleChoices;
+  final Map<String, List<String>> aggregatedMultiChoices;
+  final Map<String, List<String>> aggregatedTextItems;
+  final Map<String, int> identifiedFloraFaunaCounts;
+  final Map<String, double> identifiedRockTypesComposition;
+  final Map<String, double> identifiedBeachComposition;
+  final String? aiGeneratedImageUrl;
+  final List<String> discoveryQuestions;
   final String educationalInfo;
 
   Beach({
     required this.id,
     required this.name,
-    required this.location,
+    required this.latitude,
+    required this.longitude,
     required this.geohash,
     required this.country,
     required this.province,
@@ -57,23 +53,29 @@ class Beach {
     this.educationalInfo = '',
   });
 
-  // Create from Firestore DocumentSnapshot
+  // Create from Firestore DocumentSnapshot (Revised to be robust against nulls)
   factory Beach.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+    data ??= {}; // If data is null, initialize as an empty map
 
+    // Use defensive programming with null-aware operators (??)
     return Beach(
       id: doc.id,
-      name: data['name'] as String,
-      location: data['location'] as GeoPoint,
-      geohash: data['geohash'] as String,
-      country: data['country'] as String,
-      province: data['province'] as String,
-      municipality: data['municipality'] as String,
-      description: data['description'] as String,
+      name: data['name'] as String? ?? 'Unnamed Beach',
+      // Get latitude and longitude from the old database structure
+      latitude: (data['latitude'] as num? ?? 0.0).toDouble(),
+      longitude: (data['longitude'] as num? ?? 0.0).toDouble(),
+      geohash: data['geohash'] as String? ?? 'unknown',
+      country: data['country'] as String? ?? '',
+      province: data['province'] as String? ?? '',
+      municipality: data['municipality'] as String? ?? '',
+      description: data['description'] as String? ?? '',
       imageUrls: List<String>.from(data['imageUrls'] ?? []),
-      timestamp: data['timestamp'] as Timestamp,
-      lastAggregated: data['lastAggregated'] as Timestamp,
-      totalContributions: data['totalContributions'] as int,
+      timestamp: data['timestamp'] as Timestamp? ?? Timestamp.now(),
+      lastAggregated: data['lastAggregated'] as Timestamp? ?? Timestamp.now(),
+      totalContributions: data['totalContributions'] as int? ?? 0,
+
+      // Handle nested maps and lists defensively
       aggregatedMetrics: (data['aggregatedMetrics'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
       aggregatedSingleChoices: Map<String, String>.from(data['aggregatedSingleChoices'] ?? {}),
       aggregatedMultiChoices: (data['aggregatedMultiChoices'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<String>.from(v ?? []))) ?? {},
@@ -81,6 +83,7 @@ class Beach {
       identifiedFloraFaunaCounts: (data['identifiedFloraFaunaCounts'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, v as int)) ?? {},
       identifiedRockTypesComposition: (data['identifiedRockTypesComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
       identifiedBeachComposition: (data['identifiedBeachComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
+
       aiGeneratedImageUrl: data['aiGeneratedImageUrl'] as String?,
       discoveryQuestions: List<String>.from(data['discoveryQuestions'] ?? []),
       educationalInfo: data['educationalInfo'] as String? ?? '',
@@ -91,7 +94,8 @@ class Beach {
   Map<String, dynamic> toMap() {
     return {
       'name': name,
-      'location': location,
+      'latitude': latitude,
+      'longitude': longitude,
       'geohash': geohash,
       'country': country,
       'province': province,

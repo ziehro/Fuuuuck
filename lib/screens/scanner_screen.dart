@@ -5,7 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' show join;
 import 'package:fuuuuck/services/api/inaturalist_service.dart';
-import 'package:flutter/foundation.dart'; // For debugPrint
+// For debugPrint
 import 'package:fuuuuck/models/confirmed_identification.dart';
 
 
@@ -442,14 +442,14 @@ class _ScannerScreenState extends State<ScannerScreen> {
                   right: 0,
                   child: Center(
                     child: FloatingActionButton(
-                      onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture, // Disable button while processing or showing results
-                      child: _isProcessingImage
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Icon(Icons.camera_alt),
+                      onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture,
                       backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
                           ? Colors.grey // Dim button while disabled
                           : Theme.of(context).floatingActionButtonTheme.backgroundColor,
-                      foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor,
+                      foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor, // Disable button while processing or showing results
+                      child: _isProcessingImage
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Icon(Icons.camera_alt),
                     ),
                   ),
                 ),
