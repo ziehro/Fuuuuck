@@ -349,7 +349,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         latitude: lat,
         longitude: lon,
         // The geohash encoding is also correct now
-        //geohash: geoHasher.encode(lat, lon, precision: 9),
+        geohash: geoHasher.encode(lon, lat, precision: 9),
         country: _countryController.text,
         province: _provinceController.text,
         municipality: _municipalityController.text,
