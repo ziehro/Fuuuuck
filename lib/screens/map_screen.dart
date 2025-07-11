@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart'; // For debugPrint
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/screens/add_beach_screen.dart'; // To navigate to Add Beach screen
-import 'package:fuuuuck/screens/add_beach_screen.dart';
 import 'package:fuuuuck/screens/beach_detail_screen.dart';
 
 class MapScreen extends StatefulWidget {

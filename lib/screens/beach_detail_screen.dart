@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:fuuuuck/screens/add_beach_screen.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
@@ -97,8 +99,16 @@ class BeachDetailScreen extends StatelessWidget {
                             Center(
                               child: ElevatedButton(
                                 onPressed: () {
-                                  // TODO: Navigate to the contribution form for this beach
-                                  debugPrint('Navigating to add contribution for beach ${beach.name}');
+                                  // Navigates to AddBeachScreen with the beachId and location
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => AddBeachScreen(
+                                        beachId: beach.id,
+                                        initialLocation: LatLng(beach.latitude, beach.longitude),
+                                      ),
+                                    ),
+                                  );
                                 },
                                 child: const Text('Add Your Contribution'),
                               ),
