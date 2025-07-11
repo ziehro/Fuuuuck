@@ -75,7 +75,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
   final TextEditingController _provinceController = TextEditingController();
   final TextEditingController _municipalityController = TextEditingController();
 
-  File? _mainBeachImageFile; // For the primary image of the beach
+  List<File> _mainBeachImageFiles = []; // For multiple images of the beach // For the primary image of the beach
   List<ConfirmedIdentification> _scannerConfirmedIdentifications = []; // AI scanner results
 
 
@@ -255,11 +255,11 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
   Future<void> _pickImage() async {
     final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    final pickedFiles = await picker.pickMultiImage();
 
-    if (pickedFile != null) {
+    if (pickedFiles != null && pickedFiles.isNotEmpty) {
       setState(() {
-        _mainBeachImageFile = File(pickedFile.path);
+        _mainBeachImageFiles = pickedFiles.map((xfile) => File(xfile.path)).toList();
       });
     }
   }
@@ -298,8 +298,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       _showSnackBar('You must be logged in to add a beach.');
       return;
     }
-    if (_mainBeachImageFile == null) {
-      _showSnackBar('Please select a main beach photo.');
+    if (_mainBeachImageFiles.isEmpty) {
+      _showSnackBar('Please select at least one beach photo.');
       return;
     }
     if (_currentLocation == null) {
@@ -322,9 +322,15 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
     try {
       // 1. Upload main beach image
-      final String? mainImageUrl = await beachDataService.uploadImage(_mainBeachImageFile!);
-      if (mainImageUrl == null) {
-        _showSnackBar('Failed to upload main beach image.');
+      List<String> mainImageUrls = [];
+      for (var imageFile in _mainBeachImageFiles) {
+        final String? imageUrl = await beachDataService.uploadImage(imageFile);
+        if (imageUrl != null) {
+          mainImageUrls.add(imageUrl);
+        }
+      }
+      if (mainImageUrls.isEmpty) {
+        _showSnackBar('Failed to upload any beach images.');
         return;
       }
 
@@ -344,7 +350,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         timestamp: Timestamp.now(),
         latitude: lat,
         longitude: lon,
-        contributedImageUrls: [mainImageUrl],
+        contributedImageUrls: mainImageUrls,
         userAnswers: processedUserAnswers,
         aiConfirmedFloraFauna: _scannerConfirmedIdentifications,
         aiConfirmedRockTypes: [], // Will be populated when rock AI is ready
@@ -371,7 +377,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           province: _provinceController.text,
           municipality: _municipalityController.text,
           description: _shortDescriptionController.text,
-          imageUrls: [mainImageUrl],
+          imageUrls: mainImageUrls,
           timestamp: Timestamp.now(),
           lastAggregated: Timestamp.now(),
           totalContributions: 1,
@@ -425,6 +431,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     Map<String, String> choices = {};
     for (var field in _formFields) {
       if (field.type == InputFieldType.singleChoice && contribution.userAnswers.containsKey(field.label)) {
+        // Corrected line: Only add the value if it's not null.
         final value = contribution.userAnswers[field.label];
         if (value != null && value is String) {
           choices[field.label] = value;
@@ -565,14 +572,14 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           Text('Location: ${_currentLocation?.latitude.toStringAsFixed(4)}, ${_currentLocation?.longitude.toStringAsFixed(4)}',
               style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 16),
-          if (isNewBeach)
-            ListTile(
-              title: const Text('Main Beach Photo'),
-              trailing: _mainBeachImageFile == null
-                  ? const Icon(Icons.add_a_photo)
-                  : Image.file(_mainBeachImageFile!, width: 50, height: 50, fit: BoxFit.cover),
-              onTap: _pickImage,
-            ),
+
+          ListTile(
+            title: const Text('Main Beach Photo'),
+            trailing: _mainBeachImageFiles.isEmpty
+                ? const Icon(Icons.add_a_photo)
+                : Image.file(_mainBeachImageFiles.first, width: 50, height: 50, fit: BoxFit.cover),
+            onTap: _pickImage,
+          ),
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: _scanForIdentifications,
@@ -714,9 +721,16 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
   // --- Helper for Single Choice Dropdown ---
   Widget _buildSingleChoiceDropdown(String label, List<String> options) {
-    if (!_formData.containsKey(label) || !_formData[label].toString().isNotEmpty) {
-      _formData[label] = options.first; // Default to the first option
+    // OLD CODE: This line forced a default value if one wasn't present.
+    // if (!_formData.containsKey(label) || !_formData[label].toString().isNotEmpty) {
+    //   _formData[label] = options.first; // Default to the first option
+    // }
+
+    // NEW CODE: This ensures a null value is possible initially
+    if (!_formData.containsKey(label)) {
+      _formData[label] = null;
     }
+
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(labelText: label),
       value: _formData[label] as String?,
