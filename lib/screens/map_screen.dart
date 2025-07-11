@@ -4,12 +4,13 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart'; // For current location
 import 'package:permission_handler/permission_handler.dart'; // For location permissions
 import 'package:provider/provider.dart'; // To access BeachDataService
-// For theme colors (if needed directly)
+import 'package:flutter/foundation.dart'; // For debugPrint
 
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/screens/add_beach_screen.dart'; // To navigate to Add Beach screen
-// import 'package:fuuuuck/screens/beach_detail_screen.dart'; // Future: To navigate to beach detail
+import 'package:fuuuuck/screens/add_beach_screen.dart';
+import 'package:fuuuuck/screens/beach_detail_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -143,15 +144,19 @@ class _MapScreenState extends State<MapScreen> {
           for (final beach in beaches) {
             final marker = Marker(
               markerId: MarkerId(beach.id),
+              // FINAL CHANGE: Use the correct latitude and longitude fields (they are now doubles)
               position: LatLng(beach.latitude, beach.longitude),
               infoWindow: InfoWindow(
                 title: beach.name,
                 snippet: beach.description,
                 onTap: () {
-                  // TODO: Navigate to Beach Detail Screen on marker tap
-                  _showSnackBar('Tapped on ${beach.name}');
-                  // Example navigation (uncomment/implement BeachDetailScreen later):
-                  // Navigator.push(context, MaterialPageRoute(builder: (context) => BeachDetailScreen(beachId: beach.id)));
+                  // Navigate to the new BeachDetailScreen
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => BeachDetailScreen(beachId: beach.id),
+                    ),
+                  );
                 },
               ),
               icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), // Custom color
@@ -171,10 +176,10 @@ class _MapScreenState extends State<MapScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToAddBeachScreen,
+        child: const Icon(Icons.add_location_alt),
         tooltip: 'Add New Beach',
         backgroundColor: Theme.of(context).floatingActionButtonTheme.backgroundColor,
         foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor,
-        child: const Icon(Icons.add_location_alt),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
