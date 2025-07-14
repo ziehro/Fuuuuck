@@ -4,7 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart'; // For current location
 import 'package:permission_handler/permission_handler.dart'; // For location permissions
 import 'package:provider/provider.dart'; // To access BeachDataService
-import 'package:flutter/foundation.dart'; // For debugPrint
+// For debugPrint
 
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/models/beach_model.dart';
@@ -175,10 +175,10 @@ class _MapScreenState extends State<MapScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToAddBeachScreen,
-        child: const Icon(Icons.add_location_alt),
         tooltip: 'Add New Beach',
         backgroundColor: Theme.of(context).floatingActionButtonTheme.backgroundColor,
         foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor,
+        child: const Icon(Icons.add_location_alt),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );

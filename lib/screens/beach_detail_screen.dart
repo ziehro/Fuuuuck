@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/services/beach_data_service.dart';
-import 'package:flutter/foundation.dart';
 import 'package:fuuuuck/screens/add_beach_screen.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 

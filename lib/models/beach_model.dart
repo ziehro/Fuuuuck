@@ -26,6 +26,7 @@ class Beach {
   final String? aiGeneratedImageUrl;
   final List<String> discoveryQuestions;
   final String educationalInfo;
+  final List<String> contributedDescriptions; // Add this line
 
   Beach({
     required this.id,
@@ -51,6 +52,7 @@ class Beach {
     this.aiGeneratedImageUrl,
     this.discoveryQuestions = const [],
     this.educationalInfo = '',
+    required this.contributedDescriptions,
   });
 
   // Create from Firestore DocumentSnapshot (Revised to be robust against nulls)
@@ -87,6 +89,7 @@ class Beach {
       aiGeneratedImageUrl: data['aiGeneratedImageUrl'] as String?,
       discoveryQuestions: List<String>.from(data['discoveryQuestions'] ?? []),
       educationalInfo: data['educationalInfo'] as String? ?? '',
+      contributedDescriptions: List<String>.from(data['contributedDescriptions'] ?? []), // Add this line
     );
   }
 
@@ -115,6 +118,7 @@ class Beach {
       'aiGeneratedImageUrl': aiGeneratedImageUrl,
       'discoveryQuestions': discoveryQuestions,
       'educationalInfo': educationalInfo,
+      'contributedDescriptions': contributedDescriptions, // Add this line
     };
   }
 }

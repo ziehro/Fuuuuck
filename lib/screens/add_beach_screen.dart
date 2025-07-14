@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For File
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp, GeoPoint
-import 'package:flutter/foundation.dart'; // For debugPrint
+// For debugPrint
 
 // Corrected Imports for Location, Geocoding, Geohash, and Google Maps LatLng
 import 'package:geolocator/geolocator.dart'; // For getting current GPS location
@@ -18,7 +18,7 @@ import 'package:fuuuuck/services/auth_service.dart'; // To get current user ID
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/models/contribution_model.dart';
 import 'package:fuuuuck/models/confirmed_identification.dart'; // Correct source for ConfirmedIdentification
-import 'package:fuuuuck/main.dart'; // For theme colors
+// For theme colors
 import 'package:fuuuuck/screens/scanner_screen.dart'; // Only for navigating to the ScannerScreen widget
 
 // Enum to represent the various input types for the dynamic form
@@ -67,6 +67,7 @@ class AddBeachScreen extends StatefulWidget {
 class _AddBeachScreenState extends State<AddBeachScreen> {
   final _formKey = GlobalKey<FormState>(); // Key for form validation
   final _pageController = PageController(); // Add PageController
+
 
   // Controllers for basic text inputs
   final TextEditingController _beachNameController = TextEditingController();
@@ -257,7 +258,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     final picker = ImagePicker();
     final pickedFiles = await picker.pickMultiImage();
 
-    if (pickedFiles != null && pickedFiles.isNotEmpty) {
+    if (pickedFiles.isNotEmpty) {
       setState(() {
         _mainBeachImageFiles = pickedFiles.map((xfile) => File(xfile.path)).toList();
       });
@@ -314,7 +315,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
     if (lat < -90 || lat > 90) {
       _showSnackBar('Location data is invalid. Latitude is out of range. Please try again.');
-      debugPrint('Location Data Error: Final lat=${lat}, lon=${lon}');
+      debugPrint('Location Data Error: Final lat=$lat, lon=$lon');
       return;
     }
 
@@ -390,6 +391,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           identifiedBeachComposition: {},
           discoveryQuestions: [],
           educationalInfo: 'Initial information for this beach.',
+          contributedDescriptions: [_shortDescriptionController.text],
         );
 
         final String? beachId = await beachDataService.addBeach(
@@ -600,7 +602,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
                   spacing: 8.0,
                   runSpacing: 4.0,
                   children: _scannerConfirmedIdentifications.map((id) {
-                    final confirmedId = id as ConfirmedIdentification;
+                    final confirmedId = id;
                     return Chip(
                       label: Text(confirmedId.commonName),
                       onDeleted: () {
