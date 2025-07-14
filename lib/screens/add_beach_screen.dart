@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart'; // For getting current GPS location
 import 'package:geocoding/geocoding.dart'; // For Placemark and placemarkFromCoordinates
 import 'package:dart_geohash/dart_geohash.dart'; // Corrected: For Geohash calculation (Null-Safe)
 import 'package:google_maps_flutter/google_maps_flutter.dart'; // Corrected: For LatLng
+import 'package:flutter/services.dart'; // For SystemChannels
 
 // Your app's services and models
 import 'package:fuuuuck/services/beach_data_service.dart';
@@ -67,7 +68,8 @@ class AddBeachScreen extends StatefulWidget {
 class _AddBeachScreenState extends State<AddBeachScreen> {
   final _formKey = GlobalKey<FormState>(); // Key for form validation
   final _pageController = PageController(); // Add PageController
-
+  final FocusNode _descriptionFocusNode = FocusNode();
+  final FocusNode _beachNameFocusNode = FocusNode();
 
   // Controllers for basic text inputs
   final TextEditingController _beachNameController = TextEditingController();
@@ -243,6 +245,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     _provinceController.dispose();
     _municipalityController.dispose();
     _pageController.dispose(); // Dispose the PageController
+    _descriptionFocusNode.dispose();
+    _beachNameFocusNode.dispose();
     super.dispose();
   }
 
@@ -284,6 +288,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
 
   Future<void> _saveNewBeach() async {
+    FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
       _showSnackBar('Please fill in all required fields.');
       return;
@@ -498,6 +503,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
             Expanded(
               child: PageView(
                 controller: _pageController,
+                physics: NeverScrollableScrollPhysics(),
                 children: _buildPages(isNewBeach),
               ),
             ),
@@ -540,11 +546,25 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _shortDescriptionController,
-            decoration: InputDecoration(labelText: 'Short Description', hintText: 'Enter Here'),
+            focusNode: _descriptionFocusNode,
+            decoration: InputDecoration(
+              labelText: 'Short Description',
+              border: OutlineInputBorder(),
+              filled: true,  // Better visual feedback
+              fillColor: Colors.white,
+            ),
             maxLines: 3,
-            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter a description' : null : null,
-            onSaved: (value) => _formData['Short Description'] = value,
+            minLines: 1,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            enableInteractiveSelection: true,  // Crucial for copy/paste
             readOnly: !isNewBeach,
+            onTap: () {
+              if (!isNewBeach) return;
+              FocusScope.of(context).requestFocus(_descriptionFocusNode);
+              // Force keyboard to show
+              SystemChannels.textInput.invokeMethod('TextInput.show');
+            },
           ),
           const SizedBox(height: 16),
           TextFormField(
