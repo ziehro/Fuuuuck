@@ -20,7 +20,8 @@ class Beach {
   final Map<String, String> aggregatedSingleChoices;
   final Map<String, List<String>> aggregatedMultiChoices;
   final Map<String, List<String>> aggregatedTextItems;
-  final Map<String, int> identifiedFloraFaunaCounts;
+  // ** NEW: Changed to a Map to hold more data per species **
+  final Map<String, Map<String, dynamic>> identifiedFloraFauna;
   final Map<String, double> identifiedRockTypesComposition;
   final Map<String, double> identifiedBeachComposition;
   final String? aiGeneratedImageUrl;
@@ -46,7 +47,7 @@ class Beach {
     this.aggregatedSingleChoices = const {},
     this.aggregatedMultiChoices = const {},
     this.aggregatedTextItems = const {},
-    this.identifiedFloraFaunaCounts = const {},
+    this.identifiedFloraFauna = const {},
     this.identifiedRockTypesComposition = const {},
     this.identifiedBeachComposition = const {},
     this.aiGeneratedImageUrl,
@@ -82,7 +83,7 @@ class Beach {
       aggregatedSingleChoices: Map<String, String>.from(data['aggregatedSingleChoices'] ?? {}),
       aggregatedMultiChoices: (data['aggregatedMultiChoices'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<String>.from(v ?? []))) ?? {},
       aggregatedTextItems: (data['aggregatedTextItems'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<String>.from(v ?? []))) ?? {},
-      identifiedFloraFaunaCounts: (data['identifiedFloraFaunaCounts'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, v as int)) ?? {},
+      identifiedFloraFauna: Map<String, Map<String, dynamic>>.from(data['identifiedFloraFauna'] ?? {}),
       identifiedRockTypesComposition: (data['identifiedRockTypesComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
       identifiedBeachComposition: (data['identifiedBeachComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
 
@@ -112,7 +113,7 @@ class Beach {
       'aggregatedSingleChoices': aggregatedSingleChoices,
       'aggregatedMultiChoices': aggregatedMultiChoices,
       'aggregatedTextItems': aggregatedTextItems,
-      'identifiedFloraFaunaCounts': identifiedFloraFaunaCounts,
+      'identifiedFloraFauna': identifiedFloraFauna,
       'identifiedRockTypesComposition': identifiedRockTypesComposition,
       'identifiedBeachComposition': identifiedBeachComposition,
       'aiGeneratedImageUrl': aiGeneratedImageUrl,

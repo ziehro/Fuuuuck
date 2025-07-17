@@ -89,6 +89,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
   LatLng? _currentLocation;
   bool _gettingLocation = false;
 
+  int _currentPageIndex = 0;
+
 
   // --- All your questions from the Java app, structured for Flutter ---
   final List<FormFieldData> _formFields = [
@@ -168,12 +170,18 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     _countryController.text = 'Canada'; // Default to Canada
     _provinceController.text = 'British Columbia'; // Default to BC
 
+    _pageController.addListener(() {
+      setState(() {
+        _currentPageIndex = _pageController.page?.round() ?? 0;
+      });
+    });
+
     // If we're adding a contribution, disable text controllers and use the beach's location
     if (widget.beachId != null) {
       // You may need to load the beach's details here to populate the text controllers
       // For now, we assume these fields are read-only for contributions
       _beachNameController.text = 'Existing Beach'; // Placeholder
-      _shortDescriptionController.text = 'Adding a new contribution.'; // Placeholder
+      _shortDescriptionController.text = ''; // Start with an empty description for the new contribution
       // Also, we don't fetch location if it's already provided
       _currentLocation = widget.initialLocation;
     } else if (widget.initialLocation != null) {
@@ -258,15 +266,45 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     }
   }
 
-  Future<void> _pickImage() async {
+  Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
-    final pickedFiles = await picker.pickMultiImage();
+    final pickedFile = await picker.pickImage(source: source);
 
-    if (pickedFiles.isNotEmpty) {
+    if (pickedFile != null) {
       setState(() {
-        _mainBeachImageFiles = pickedFiles.map((xfile) => File(xfile.path)).toList();
+        _mainBeachImageFiles = [File(pickedFile.path)];
       });
     }
+  }
+
+  void _showImagePickerOptions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (BuildContext context) {
+        return SafeArea(
+          child: Wrap(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Photo Library'),
+                onTap: () {
+                  _pickImage(ImageSource.gallery);
+                  Navigator.of(context).pop();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Camera'),
+                onTap: () {
+                  _pickImage(ImageSource.camera);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // Navigate to scanner and get results back
@@ -324,7 +362,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       return;
     }
 
-    _showSnackBar('Saving beach data');
+    _showSnackBar('Saving beach data...');
 
     try {
       // 1. Upload main beach image
@@ -349,6 +387,10 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           processedUserAnswers[field.label] = rawValue.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
         }
       }
+
+      // Also save the short description
+      processedUserAnswers['Short Description'] = _shortDescriptionController.text;
+
 
       // 2. Create the initial Contribution object
       final contribution = Contribution(
@@ -391,7 +433,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           aggregatedSingleChoices: _getAggregatedSingleChoicesFromContribution(contribution),
           aggregatedMultiChoices: _getAggregatedMultiChoicesFromContribution(contribution),
           aggregatedTextItems: _getAggregatedTextItemsFromContribution(contribution),
-          identifiedFloraFaunaCounts: _getAggregatedFloraFaunaCountsFromContribution(contribution),
+          // ** FIX: Use the new data structure **
+          identifiedFloraFauna: _getAggregatedFloraFauna(contribution),
           identifiedRockTypesComposition: {},
           identifiedBeachComposition: {},
           discoveryQuestions: [],
@@ -414,7 +457,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       Navigator.pop(context); // Go back after saving
 
     } catch (e) {
-      print('Error during save new beach: $e');
+      debugPrint('Error during save new beach: $e');
       _showSnackBar('An error occurred: ${e.toString()}');
     }
   }
@@ -475,196 +518,238 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     return textItems;
   }
 
-  Map<String, int> _getAggregatedFloraFaunaCountsFromContribution(Contribution contribution) {
-    Map<String, int> counts = {};
+  // ** NEW: Updated helper to return the new data structure **
+  Map<String, Map<String, dynamic>> _getAggregatedFloraFauna(Contribution contribution) {
+    Map<String, Map<String, dynamic>> floraFauna = {};
     for (var confirmed in contribution.aiConfirmedFloraFauna) {
-      counts[confirmed.commonName] = (counts[confirmed.commonName] ?? 0) + 1;
+      floraFauna[confirmed.commonName] = {
+        'count': 1,
+        'taxonId': confirmed.taxonId,
+        'imageUrl': confirmed.imageUrl,
+      };
     }
-    return counts;
+    return floraFauna;
+  }
+
+  // ** NEW: Function to show the confirmation dialog **
+  Future<bool> _onWillPop() async {
+    return (await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Are you sure?'),
+        content: const Text('Do you want to discard your changes and leave this screen?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    )) ?? false;
   }
 
 
   @override
   Widget build(BuildContext context) {
     final bool isNewBeach = widget.beachId == null;
+    final List<Widget> pages = _buildPages(isNewBeach);
+    final List<String> pageTitles = [
+      "Details", "Flora", "Fauna", "Composition", "Man-Made"
+    ];
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(isNewBeach ? 'Add New Beach' : 'Add Contribution'),
-        backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
-        foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-      ),
-      body: _gettingLocation
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-        key: _formKey,
-        child: Column(
-          children: [
-            Expanded(
-              child: PageView(
-                controller: _pageController,
-                physics: NeverScrollableScrollPhysics(),
-                children: _buildPages(isNewBeach),
-              ),
-            ),
-            // The "Save" button remains at the bottom
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: ElevatedButton(
-                onPressed: _saveNewBeach,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                ),
-                child: Text(isNewBeach ? 'Save New Beach' : 'Add Contribution'),
-              ),
+
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(isNewBeach ? 'Add New Beach' : 'Add Contribution'),
+          backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+          foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: _saveNewBeach,
             ),
           ],
+        ),
+        body: _gettingLocation
+            ? const Center(child: CircularProgressIndicator())
+            : Form(
+          key: _formKey,
+          child: Column(
+            children: [
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  children: pages,
+                  onPageChanged: (index) {
+                    setState(() {
+                      _currentPageIndex = index;
+                    });
+                  },
+                ),
+              ),
+              // ** NEW: Page Selector **
+              Container(
+                padding: const EdgeInsets.all(8.0),
+                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (_currentPageIndex > 0)
+                      TextButton.icon(
+                        icon: const Icon(Icons.arrow_back),
+                        label: Text(pageTitles[_currentPageIndex - 1]),
+                        onPressed: () {
+                          _pageController.previousPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.ease,
+                          );
+                        },
+                      ),
+                    const Spacer(),
+                    if (_currentPageIndex < pages.length - 1)
+                      TextButton.icon(
+                        icon: const Icon(Icons.arrow_forward),
+                        label: Text(pageTitles[_currentPageIndex + 1]),
+                        onPressed: () {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.ease,
+                          );
+                        },
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
   List<Widget> _buildPages(bool isNewBeach) {
-    List<Widget> pages = [];
-    int fieldIndex = 0;
+    // Page 1: Core Details
+    final page1 = ListView(
+      padding: const EdgeInsets.all(16.0),
+      children: [
+        TextFormField(
+          controller: _beachNameController,
+          decoration: const InputDecoration(labelText: 'Beach Name', hintText: 'Enter Here'),
+          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter a beach name' : null : null,
+          onSaved: (value) => _formData['Beach Name'] = value,
+          readOnly: !isNewBeach, // Make read-only for contributions
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _shortDescriptionController,
+          focusNode: _descriptionFocusNode,
+          decoration: const InputDecoration(
+            labelText: 'Short Description',
+            border: OutlineInputBorder(),
+            filled: true,  // Better visual feedback
+            fillColor: Colors.white,
+          ),
+          maxLines: 3,
+          minLines: 1,
+          keyboardType: TextInputType.multiline,
+          textInputAction: TextInputAction.newline,
+          enableInteractiveSelection: true,
+          onSaved: (value) => _formData['Short Description'] = value,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _countryController,
+          decoration: const InputDecoration(labelText: 'Country', hintText: 'Enter Here'),
+          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter country' : null : null,
+          onSaved: (value) => _formData['Country'] = value,
+          readOnly: !isNewBeach,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _provinceController,
+          decoration: const InputDecoration(labelText: 'Province', hintText: 'Enter Here'),
+          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter province' : null : null,
+          onSaved: (value) => _formData['Province'] = value,
+          readOnly: !isNewBeach,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _municipalityController,
+          decoration: const InputDecoration(labelText: 'Municipality', hintText: 'Enter Here'),
+          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter municipality' : null : null,
+          onSaved: (value) => _formData['Municipality'] = value,
+          readOnly: !isNewBeach,
+        ),
+        const SizedBox(height: 16),
+        Text('Location: ${_currentLocation?.latitude.toStringAsFixed(4)}, ${_currentLocation?.longitude.toStringAsFixed(4)}',
+            style: Theme.of(context).textTheme.bodyLarge),
+        const SizedBox(height: 16),
 
-    // Page 1: Core Details, Image Picker, and Scanner
-    pages.add(
-      ListView(
-        padding: const EdgeInsets.all(16.0),
-        children: [
-          TextFormField(
-            controller: _beachNameController,
-            decoration: InputDecoration(labelText: 'Beach Name', hintText: 'Enter Here'),
-            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter a beach name' : null : null,
-            onSaved: (value) => _formData['Beach Name'] = value,
-            readOnly: !isNewBeach, // Make read-only for contributions
+        ListTile(
+          title: const Text('Main Beach Photo'),
+          trailing: _mainBeachImageFiles.isEmpty
+              ? const Icon(Icons.add_a_photo)
+              : Image.file(_mainBeachImageFiles.first, width: 50, height: 50, fit: BoxFit.cover),
+          onTap: _showImagePickerOptions,
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: _scanForIdentifications,
+          icon: const Icon(Icons.camera_alt),
+          label: Text('Scan Flora/Fauna (${_scannerConfirmedIdentifications.length} confirmed)'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Theme.of(context).primaryColor,
+            foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _shortDescriptionController,
-            focusNode: _descriptionFocusNode,
-            decoration: InputDecoration(
-              labelText: 'Short Description',
-              border: OutlineInputBorder(),
-              filled: true,  // Better visual feedback
-              fillColor: Colors.white,
-            ),
-            maxLines: 3,
-            minLines: 1,
-            keyboardType: TextInputType.multiline,
-            textInputAction: TextInputAction.newline,
-            enableInteractiveSelection: true,  // Crucial for copy/paste
-            readOnly: !isNewBeach,
-            onTap: () {
-              if (!isNewBeach) return;
-              FocusScope.of(context).requestFocus(_descriptionFocusNode);
-              // Force keyboard to show
-              SystemChannels.textInput.invokeMethod('TextInput.show');
-            },
+        ),
+        const SizedBox(height: 16),
+        if (_scannerConfirmedIdentifications.isNotEmpty)
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Confirmed Scans:', style: Theme.of(context).textTheme.titleSmall),
+              Wrap(
+                spacing: 8.0,
+                runSpacing: 4.0,
+                children: _scannerConfirmedIdentifications.map((id) {
+                  final confirmedId = id;
+                  return Chip(
+                    label: Text(confirmedId.commonName),
+                    onDeleted: () {
+                      setState(() {
+                        _scannerConfirmedIdentifications.remove(id);
+                      });
+                    },
+                  );
+                }).toList(),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _countryController,
-            decoration: InputDecoration(labelText: 'Country', hintText: 'Enter Here'),
-            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter country' : null : null,
-            onSaved: (value) => _formData['Country'] = value,
-            readOnly: !isNewBeach,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _provinceController,
-            decoration: InputDecoration(labelText: 'Province', hintText: 'Enter Here'),
-            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter province' : null : null,
-            onSaved: (value) => _formData['Province'] = value,
-            readOnly: !isNewBeach,
-          ),
-          const SizedBox(height: 16),
-          TextFormField(
-            controller: _municipalityController,
-            decoration: InputDecoration(labelText: 'Municipality', hintText: 'Enter Here'),
-            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter municipality' : null : null,
-            onSaved: (value) => _formData['Municipality'] = value,
-            readOnly: !isNewBeach,
-          ),
-          const SizedBox(height: 16),
-          Text('Location: ${_currentLocation?.latitude.toStringAsFixed(4)}, ${_currentLocation?.longitude.toStringAsFixed(4)}',
-              style: Theme.of(context).textTheme.bodyLarge),
-          const SizedBox(height: 16),
-
-          ListTile(
-            title: const Text('Main Beach Photo'),
-            trailing: _mainBeachImageFiles.isEmpty
-                ? const Icon(Icons.add_a_photo)
-                : Image.file(_mainBeachImageFiles.first, width: 50, height: 50, fit: BoxFit.cover),
-            onTap: _pickImage,
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: _scanForIdentifications,
-            icon: const Icon(Icons.camera_alt),
-            label: Text('Scan Flora/Fauna (${_scannerConfirmedIdentifications.length} confirmed)'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Theme.of(context).primaryColor,
-              foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-            ),
-          ),
-          const SizedBox(height: 16),
-          if (_scannerConfirmedIdentifications.isNotEmpty)
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Confirmed Scans:', style: Theme.of(context).textTheme.titleSmall),
-                Wrap(
-                  spacing: 8.0,
-                  runSpacing: 4.0,
-                  children: _scannerConfirmedIdentifications.map((id) {
-                    final confirmedId = id;
-                    return Chip(
-                      label: Text(confirmedId.commonName),
-                      onDeleted: () {
-                        setState(() {
-                          _scannerConfirmedIdentifications.remove(id);
-                        });
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ),
-        ],
-      ),
+      ],
     );
 
-    // Grouping the rest of the fields by type as pages
-    List<FormFieldData> currentPageFields = [];
-    InputFieldType? currentType;
+    // Group fields for other pages
+    final floraFields = _formFields.where((f) => ['Trees', 'Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types'].contains(f.label)).toList();
+    final faunaFields = _formFields.where((f) => ['Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels', 'Birds', 'Which Shells'].contains(f.label)).toList();
+    final compositionFields = _formFields.where((f) => ['Boulders', 'Sand', 'Pebbles', 'Rocks', 'Mud', 'Stone', 'Coal', 'Bluffs Grade', 'Bluff Comp', 'Bluff Height', 'Width', 'Length', 'Shape', 'Rock Type'].contains(f.label)).toList();
+    final manMadeFields = _formFields.where((f) => !floraFields.contains(f) && !faunaFields.contains(f) && !compositionFields.contains(f)).toList();
 
-    while (fieldIndex < _formFields.length) {
-      final field = _formFields[fieldIndex];
-      if (currentType == null) {
-        currentType = field.type;
-        currentPageFields.add(field);
-      } else if (field.type == currentType) {
-        currentPageFields.add(field);
-      } else {
-        // Start a new page for the new field type
-        pages.add(_buildFormPage(currentPageFields));
-        currentPageFields = [field];
-        currentType = field.type;
-      }
-      fieldIndex++;
-    }
-    // Add the last page
-    if (currentPageFields.isNotEmpty) {
-      pages.add(_buildFormPage(currentPageFields));
-    }
 
-    return pages;
+    return [
+      page1,
+      _buildFormPage(floraFields),
+      _buildFormPage(faunaFields),
+      _buildFormPage(compositionFields),
+      _buildFormPage(manMadeFields),
+    ];
   }
+
 
   Widget _buildFormPage(List<FormFieldData> fields) {
     return ListView(

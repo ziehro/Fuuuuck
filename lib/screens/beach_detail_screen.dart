@@ -5,11 +5,64 @@ import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/screens/add_beach_screen.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:fuuuuck/services/api/inaturalist_service.dart'; // ** NEW: Import iNaturalistService **
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
 
   const BeachDetailScreen({super.key, required this.beachId});
+
+  // ** NEW: Function to show the details dialog **
+  void _showFloraFaunaDetailsDialog(BuildContext context, String name, Map<String, dynamic> details) {
+    final String imageUrl = details['imageUrl'] ?? '';
+    final int taxonId = details['taxonId'] ?? 0;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(name),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (imageUrl.isNotEmpty)
+                  Image.network(
+                    imageUrl,
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                const SizedBox(height: 16),
+                FutureBuilder<Map<String, dynamic>?>(
+                  future: INaturalistService().getTaxonDetails(taxonId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const CircularProgressIndicator();
+                    }
+                    if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
+                      return const Text('Could not load educational info.');
+                    }
+                    final taxonDetails = snapshot.data!;
+                    final blurb = taxonDetails['wikipedia_summary'] ?? 'No educational blurb available.';
+                    return Text(blurb);
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              child: const Text('Close'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -72,16 +125,40 @@ class BeachDetailScreen extends StatelessWidget {
                   ),
                 ),
 
+                // ** NEW: Contribute Button moved higher for visibility **
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Navigates to AddBeachScreen with the beachId and location
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => AddBeachScreen(
+                            beachId: beach.id,
+                            initialLocation: LatLng(beach.latitude, beach.longitude),
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Theme.of(context).colorScheme.secondary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Add Your Contribution'),
+                  ),
+                ),
+
                 // Aggregated Data Tabs
                 DefaultTabController(
-                  length: 3, // For "Current Data", "Educational", and "Contributions"
+                  length: 2, // For "Current Data" and "Educational"
                   child: Column(
                     children: [
                       const TabBar(
                         tabs: [
                           Tab(text: 'Current Data'),
                           Tab(text: 'Educational Info'),
-                          Tab(text: 'Contribute'),
                         ],
                       ),
                       SizedBox(
@@ -93,25 +170,6 @@ class BeachDetailScreen extends StatelessWidget {
 
                             // 2. Educational Info Tab
                             _buildEducationalInfoTab(context, beach),
-
-                            // 3. Contribute Tab (or a button to navigate)
-                            Center(
-                              child: ElevatedButton(
-                                onPressed: () {
-                                  // Navigates to AddBeachScreen with the beachId and location
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => AddBeachScreen(
-                                        beachId: beach.id,
-                                        initialLocation: LatLng(beach.latitude, beach.longitude),
-                                      ),
-                                    ),
-                                  );
-                                },
-                                child: const Text('Add Your Contribution'),
-                              ),
-                            ),
                           ],
                         ),
                       ),
@@ -153,9 +211,14 @@ class BeachDetailScreen extends StatelessWidget {
           ...beach.aggregatedTextItems.entries.map((entry) => _buildDataRow(entry.key, entry.value.join(', '))),
           const SizedBox(height: 16),
 
-          // Display AI Identified Flora & Fauna
+          // ** NEW: Updated Flora & Fauna display with long press **
           _buildCategoryTitle(context, 'AI Identified Flora & Fauna'),
-          ...beach.identifiedFloraFaunaCounts.entries.map((entry) => _buildDataRow(entry.key, entry.value.toString())),
+          ...beach.identifiedFloraFauna.entries.map((entry) {
+            return GestureDetector(
+              onLongPress: () => _showFloraFaunaDetailsDialog(context, entry.key, entry.value),
+              child: _buildDataRow(entry.key, entry.value['count'].toString()),
+            );
+          }),
           const SizedBox(height: 16),
 
           // Display AI Identified Rock/Beach Composition

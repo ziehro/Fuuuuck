@@ -14,6 +14,8 @@ class INaturalistService {
 
     final request = http.MultipartRequest('POST', uri);
 
+    request.headers['User-Agent'] = 'BeachBookApp/1.0';
+
     request.files.add(
       await http.MultipartFile.fromPath(
         'file',

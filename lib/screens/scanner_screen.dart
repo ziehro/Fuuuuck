@@ -128,7 +128,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
         final results = await inatService.identifyImage(File(path));
         setState(() {
           _identificationResults = results;
-          _isProcessingImage = false; // Stop loading
         });
         debugPrint('iNaturalist Results: $results');
         if (results.isEmpty) {
@@ -140,21 +139,17 @@ class _ScannerScreenState extends State<ScannerScreen> {
         setState(() {
           // Ensure we display the specific error message from the service
           _identificationError = e.toString().replaceFirst('Exception: ', '');
-          _isProcessingImage = false; // Stop loading
         });
         debugPrint('Identification error caught in ScannerScreen: $e');
         _showSnackBar('Identification failed: ${e.toString().replaceFirst('Exception: ', '')}');
       }
 
     } on CameraException catch (e) {
-      setState(() {
-        _isProcessingImage = false; // Stop loading on camera error
-      });
       debugPrint('Error taking picture: $e');
       _showSnackBar('Error taking picture: ${e.description}');
     } finally {
-      // Ensure processing state is reset even if other errors occur
-      if (_isProcessingImage && mounted) {
+      // ** NEW: Ensure processing state is always reset **
+      if (mounted) {
         setState(() {
           _isProcessingImage = false;
         });
