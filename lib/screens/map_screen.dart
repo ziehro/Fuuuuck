@@ -4,7 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart'; // For current location
 import 'package:permission_handler/permission_handler.dart'; // For location permissions
 import 'package:provider/provider.dart'; // To access BeachDataService
-// For debugPrint
+import 'dart:async'; // For async operations
 
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/models/beach_model.dart';
@@ -20,153 +20,121 @@ class MapScreen extends StatefulWidget {
 
 class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
-  LatLng? _currentPosition; // To store user's current location
-  bool _isLoadingLocation = true; // To show loading while getting location
-  bool _cameraMovedToInitialLocation = false; // Track if camera has moved
+  LatLng? _currentPosition;
+  Stream<List<Beach>>? _beachesStream; // Stream to hold nearby beaches
 
   @override
   void initState() {
     super.initState();
-    _getCurrentLocation(); // Start getting location when the screen initializes
+    _initializeLocationAndBeaches();
   }
 
-  // --- Geolocation Methods ---
-  Future<void> _getCurrentLocation() async {
-    setState(() {
-      _isLoadingLocation = true;
-    });
+  Future<void> _initializeLocationAndBeaches() async {
     try {
-      // Request location permissions
+      // First, get location permission
       PermissionStatus permission = await Permission.locationWhenInUse.request();
-
-      if (permission.isGranted) {
-        Position position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
+      if (!permission.isGranted) {
+        _showSnackBar('Location permission is required to find nearby beaches.');
+        // Set a default location if permission is denied
         setState(() {
-          _currentPosition = LatLng(position.latitude, position.longitude);
-          _isLoadingLocation = false;
+          _currentPosition = const LatLng(49.2827, -123.1207); // Default to Vancouver
+          _loadBeachesForCurrentLocation();
         });
-        // If map controller is already available, move camera
-        if (_mapController != null && !_cameraMovedToInitialLocation) {
-          _mapController!.animateCamera(
-            CameraUpdate.newLatLngZoom(_currentPosition!, 10.0),
-          );
-          _cameraMovedToInitialLocation = true;
-        }
-      } else {
-        // Handle permission denied
-        _showSnackBar('Location permission denied. Cannot show current location.');
-        setState(() {
-          _isLoadingLocation = false;
-        });
+        return;
       }
-    } catch (e) {
-      debugPrint('Error getting current location: $e');
-      _showSnackBar('Failed to get current location: ${e.toString()}');
+
+      // Then, get the current position
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       setState(() {
-        _isLoadingLocation = false;
+        _currentPosition = LatLng(position.latitude, position.longitude);
+        _loadBeachesForCurrentLocation();
+      });
+
+    } catch (e) {
+      _showSnackBar('Failed to get current location: $e');
+      // Fallback to a default location
+      setState(() {
+        _currentPosition = const LatLng(49.2827, -123.1207);
+        _loadBeachesForCurrentLocation();
+      });
+    }
+  }
+
+  void _loadBeachesForCurrentLocation() {
+    if (_currentPosition != null) {
+      final beachDataService = Provider.of<BeachDataService>(context, listen: false);
+      setState(() {
+        _beachesStream = beachDataService.getBeachesNearby(
+          latitude: _currentPosition!.latitude,
+          longitude: _currentPosition!.longitude,
+        );
       });
     }
   }
 
   void _showSnackBar(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
-  // --- Map Callbacks ---
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
-    // If we have current location and haven't moved camera yet, animate to it
-    if (_currentPosition != null && !_cameraMovedToInitialLocation) {
-      _mapController!.animateCamera(
-        CameraUpdate.newLatLngZoom(_currentPosition!, 10.0), // Zoom level 10
-      );
-      _cameraMovedToInitialLocation = true;
+    if (_currentPosition != null) {
+      controller.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 10.0));
     }
   }
 
-  // --- Navigation to Add Beach Screen ---
   void _navigateToAddBeachScreen() {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const AddBeachScreen()), // Pass initialLocation if desired later
+      MaterialPageRoute(builder: (context) => const AddBeachScreen()),
     );
   }
 
   @override
   void dispose() {
-    _mapController?.dispose(); // Dispose map controller to free resources
+    _mapController?.dispose();
     super.dispose();
   }
 
+
   @override
   Widget build(BuildContext context) {
-    final beachDataService = Provider.of<BeachDataService>(context);
-
-    // Initial camera position (e.g., center of your region if no location yet)
-    final CameraPosition initialCameraPosition = CameraPosition(
-      target: _currentPosition ?? const LatLng(49.2827, -123.1207), // Default to Vancouver
-      zoom: _currentPosition != null ? 10.0 : 7.0, // Zoom based on location availability
-    );
-
     return Scaffold(
-      body: _isLoadingLocation && _currentPosition == null
-          ? const Center(child: CircularProgressIndicator())
+      body: _currentPosition == null
+          ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Getting your location...'))
           : StreamBuilder<List<Beach>>(
-        stream: beachDataService.getBeaches(), // Listen for all beaches
+        stream: _beachesStream,
         builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(child: Text('Error loading beaches: ${snapshot.error}'));
+          if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+            return const Center(child: CircularProgressIndicator(semanticsLabel: 'Loading beaches...'));
           }
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            // While waiting for data, show map with no markers yet or loading indicator
-            return _currentPosition != null // Show map if we have location, otherwise general loading
-                ? GoogleMap(
-              initialCameraPosition: initialCameraPosition,
-              onMapCreated: _onMapCreated,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
-              zoomControlsEnabled: false,
-              // No markers yet, as data is still loading
-            )
-                : const Center(child: CircularProgressIndicator());
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
           }
 
-          // Data has arrived, now build the markers
-          final List<Beach> beaches = snapshot.data ?? [];
-          final Set<Marker> markers = {}; // Local set of markers for this build
-          for (final beach in beaches) {
-            final marker = Marker(
-              markerId: MarkerId(beach.id),
-              // FINAL CHANGE: Use the correct latitude and longitude fields (they are now doubles)
-              position: LatLng(beach.latitude, beach.longitude),
-              infoWindow: InfoWindow(
-                title: beach.name,
-                snippet: beach.description,
-                onTap: () {
-                  // Navigate to the new BeachDetailScreen
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => BeachDetailScreen(beachId: beach.id),
-                    ),
-                  );
-                },
+          final beaches = snapshot.data ?? [];
+          final markers = beaches.map((beach) => Marker(
+            markerId: MarkerId(beach.id),
+            position: LatLng(beach.latitude, beach.longitude),
+            infoWindow: InfoWindow(
+              title: beach.name,
+              snippet: beach.description,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => BeachDetailScreen(beachId: beach.id)),
               ),
-              icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure), // Custom color
-            );
-            markers.add(marker);
-          }
+            ),
+          )).toSet();
 
           return GoogleMap(
-            initialCameraPosition: initialCameraPosition,
+            initialCameraPosition: CameraPosition(
+              target: _currentPosition!,
+              zoom: 10.0,
+            ),
             onMapCreated: _onMapCreated,
-            markers: markers, // Pass the newly generated markers
+            markers: markers,
             myLocationEnabled: true,
             myLocationButtonEnabled: true,
             zoomControlsEnabled: false,
@@ -176,11 +144,8 @@ class _MapScreenState extends State<MapScreen> {
       floatingActionButton: FloatingActionButton(
         onPressed: _navigateToAddBeachScreen,
         tooltip: 'Add New Beach',
-        backgroundColor: Theme.of(context).floatingActionButtonTheme.backgroundColor,
-        foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor,
         child: const Icon(Icons.add_location_alt),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
     );
   }
 }
