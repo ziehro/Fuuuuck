@@ -1,4 +1,4 @@
-// ziehro/fuuuuck/ziehro-Fuuuuck-b2274051aa8ffd19a9b4cf34cac1a996c65c1899/functions/index.js
+// functions/index.js
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp } = require("firebase-admin/app");
 const { getFirestore, FieldValue } = require("firebase-admin/firestore");
@@ -10,83 +10,58 @@ exports.aggregateContribution = onDocumentCreated(
   async (event) => {
     const contribution = event.data.data();
     const beachId = event.params.beachId;
-
     const beachRef = getFirestore().collection("beaches").doc(beachId);
 
+    // Use a transaction to atomically update the beach document
     return getFirestore().runTransaction(async (transaction) => {
       const beachDoc = await transaction.get(beachRef);
       if (!beachDoc.exists) {
-        throw "Beach document does not exist!";
+        throw `Beach document with ID ${beachId} does not exist.`;
       }
 
       const beachData = beachDoc.data();
-      const totalContributions = beachData.totalContributions + 1;
+      const oldTotalContributions = beachData.totalContributions || 0;
+      const newTotalContributions = oldTotalContributions + 1;
 
+      // Start building the updates object
       const updates = {
-        totalContributions: totalContributions,
+        totalContributions: newTotalContributions,
         lastAggregated: FieldValue.serverTimestamp(),
       };
 
-      // Amalgamate Metrics (Sliders and Numbers)
-      const newMetrics = {};
-      for (const key in contribution.userAnswers) {
-        if (typeof contribution.userAnswers[key] === 'number') {
-          const currentMetric = beachData.aggregatedMetrics[key] || 0;
-          const newAverage = ((currentMetric * (totalContributions - 1)) + contribution.userAnswers[key]) / totalContributions;
-          newMetrics[`aggregatedMetrics.${key}`] = newAverage;
+      // --- Amalgamate Aggregated Metrics ---
+      const userAnswers = contribution.userAnswers || {};
+      for (const key in userAnswers) {
+        const newValue = userAnswers[key];
+        if (typeof newValue === 'number') {
+          const currentMetricValue = beachData.aggregatedMetrics[key] || 0;
+          const newAverage = ((currentMetricValue * oldTotalContributions) + newValue) / newTotalContributions;
+          updates[`aggregatedMetrics.${key}`] = newAverage;
         }
       }
-      Object.assign(updates, newMetrics);
 
-      // Amalgamate Single Choices (simple overwrite with latest, but can be improved)
-      const newSingleChoices = {};
-      for (const key in contribution.userAnswers) {
-        if (typeof contribution.userAnswers[key] === 'string') {
-            newSingleChoices[`aggregatedSingleChoices.${key}`] = contribution.userAnswers[key];
-        }
+      // --- Update Array Fields Safely ---
+      // ** FIX: Only call arrayUnion if there are new images to add **
+      if (contribution.contributedImageUrls && contribution.contributedImageUrls.length > 0) {
+        updates.imageUrls = FieldValue.arrayUnion(...contribution.contributedImageUrls);
       }
-      Object.assign(updates, newSingleChoices);
+      // ** FIX: Only call arrayUnion if a new description exists **
+      if (userAnswers["Short Description"]) {
+        updates.contributedDescriptions = FieldValue.arrayUnion(userAnswers["Short Description"]);
+      }
 
-
-      // Amalgamate Multi-Choices (union of all chosen options)
-        const newMultiChoices = {};
-        for (const key in contribution.userAnswers) {
-            if (Array.isArray(contribution.userAnswers[key])) {
-                newMultiChoices[`aggregatedMultiChoices.${key}`] = FieldValue.arrayUnion(...contribution.userAnswers[key]);
-            }
-        }
-        Object.assign(updates, newMultiChoices);
-
-
-      // Amalgamate Text Items
-      const newTextItems = {};
-        for (const key in contribution.userAnswers) {
-            if (Array.isArray(contribution.userAnswers[key])) {
-                newTextItems[`aggregatedTextItems.${key}`] = FieldValue.arrayUnion(...contribution.userAnswers[key]);
-            }
-        }
-        Object.assign(updates, newTextItems);
-
-      // Amalgamate Flora/Fauna Counts
+      // --- Update Flora/Fauna Counts ---
       if (contribution.aiConfirmedFloraFauna) {
-        const newFloraFauna = {};
         for (const item of contribution.aiConfirmedFloraFauna) {
-          newFloraFauna[`identifiedFloraFaunaCounts.${item.commonName}`] = FieldValue.increment(1);
+            // Use dot notation to safely increment the count for a specific species
+            updates[`identifiedFloraFauna.${item.commonName}.count`] = FieldValue.increment(1);
+            // Set the taxonId and imageUrl if they don't exist yet
+            updates[`identifiedFloraFauna.${item.commonName}.taxonId`] = item.taxonId;
+            updates[`identifiedFloraFauna.${item.commonName}.imageUrl`] = item.imageUrl;
         }
-        Object.assign(updates, newFloraFauna);
       }
 
-      // Amalgamate Contributed Descriptions
-      if (contribution.userAnswers && contribution.userAnswers["Short Description"]) {
-        updates.contributedDescriptions = FieldValue.arrayUnion(contribution.userAnswers["Short Description"]);
-      }
-
-      // Amalgamate Image URLs
-        if (contribution.contributedImageUrls) {
-            updates.imageUrls = FieldValue.arrayUnion(...contribution.contributedImageUrls);
-        }
-
-
+      // Commit all updates to the document
       transaction.update(beachRef, updates);
     });
   }
