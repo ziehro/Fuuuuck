@@ -6,7 +6,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/models/contribution_model.dart';
 import 'package:uuid/uuid.dart';
-import 'package:dart_geohash/dart_geohash.dart'; // ** NEW: Import for Geohash **
+import 'package:dart_geohash/dart_geohash.dart';
 
 class BeachDataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -54,19 +54,10 @@ class BeachDataService {
     }
   }
 
-  // ** OLD METHOD: Kept for reference, but we won't use it in the map **
-  Stream<List<Beach>> getBeaches() {
-    return _firestore.collection('beaches').snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Beach.fromFirestore(doc)).toList();
-    });
-  }
-
-  // ** NEW METHOD: To get beaches based on geohash **
   Stream<List<Beach>> getBeachesNearby({required double latitude, required double longitude, double radius = 50000}) {
     final geoHasher = GeoHasher();
-    String centerGeohash = geoHasher.encode(longitude, latitude, precision: 5);
+    String centerGeohash = geoHasher.encode(longitude, latitude, precision: 4);
 
-    // Query for beaches within the central geohash area
     Query query = _firestore.collection('beaches')
         .where('geohash', isGreaterThanOrEqualTo: centerGeohash)
         .where('geohash', isLessThan: '$centerGeohash~');
