@@ -85,19 +85,16 @@ class BeachDetailScreen extends StatelessWidget {
               headerSliverBuilder: (context, innerBoxIsScrolled) {
                 return [
                   SliverAppBar(
-                    expandedHeight: 250.0,
+                    expandedHeight: 350.0,
                     floating: false,
                     pinned: true,
                     leading: const BackButton(),
                     flexibleSpace: FlexibleSpaceBar(
-                      title: Text(beach.name, style: const TextStyle(fontSize: 16)),
-                      background: beach.imageUrls.isNotEmpty
-                          ? Image.network(
-                        beach.imageUrls.first,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 250),
-                      )
-                          : Container(color: Colors.grey),
+                      title: Text(beach.name, style: const TextStyle(fontSize: 16, color: Colors.white, backgroundColor: Colors.black45)),
+                      background: ImageDescriptionCarousel(
+                        imageUrls: beach.imageUrls,
+                        descriptions: beach.contributedDescriptions,
+                      ),
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -234,6 +231,85 @@ class BeachDetailScreen extends StatelessWidget {
             Expanded(child: Text(value, textAlign: TextAlign.end)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class ImageDescriptionCarousel extends StatefulWidget {
+  final List<String> imageUrls;
+  final List<String> descriptions;
+
+  const ImageDescriptionCarousel({
+    super.key,
+    required this.imageUrls,
+    required this.descriptions,
+  });
+
+  @override
+  State<ImageDescriptionCarousel> createState() => _ImageDescriptionCarouselState();
+}
+
+class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
+  int _currentPage = 0;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayDescriptions = widget.descriptions.isNotEmpty ? widget.descriptions : ['No description available.'];
+
+    return SizedBox(
+      height: 350,
+      child: Stack(
+        alignment: Alignment.bottomCenter,
+        children: [
+          PageView.builder(
+            onPageChanged: (value) {
+              setState(() {
+                _currentPage = value;
+              });
+            },
+            itemCount: widget.imageUrls.length,
+            itemBuilder: (context, index) {
+              return Image.network(
+                widget.imageUrls[index],
+                fit: BoxFit.cover,
+                width: double.infinity,
+                errorBuilder: (context, error, stackTrace) =>
+                const Center(child: Icon(Icons.broken_image, size: 100, color: Colors.grey)),
+              );
+            },
+          ),
+          Container(
+            width: double.infinity,
+            color: Colors.black.withOpacity(0.6),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
+            child: Text(
+              widget.descriptions.length > _currentPage ? widget.descriptions[_currentPage] : displayDescriptions[0],
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Positioned(
+            bottom: 16,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(widget.imageUrls.length, (index) {
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  margin: const EdgeInsets.symmetric(horizontal: 4.0),
+                  height: 8.0,
+                  width: _currentPage == index ? 24.0 : 8.0,
+                  decoration: BoxDecoration(
+                    color: _currentPage == index ? Theme.of(context).primaryColor : Colors.white,
+                    borderRadius: BorderRadius.circular(4.0),
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
       ),
     );
   }
