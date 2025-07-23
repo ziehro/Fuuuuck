@@ -28,7 +28,7 @@ dependencies:
   share_plus: ^11.0.0 # Use the latest stable version
   shared_preferences: ^2.5.3 # Use the latest stable version
   firebase_storage: ^12.4.9
-
+  flutter_dotenv: ^5.1.0 # Add this line
   path: ^1.9.1
   cupertino_icons: ^1.0.6
   http_parser: ^4.1.2

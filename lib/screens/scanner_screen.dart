@@ -5,9 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' show join;
 import 'package:fuuuuck/services/api/inaturalist_service.dart';
-// For debugPrint
 import 'package:fuuuuck/models/confirmed_identification.dart';
-
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
@@ -22,21 +20,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
   Future<void>? _initializeControllerFuture;
   String? _imagePath;
   bool _isProcessingImage = false;
-  List<dynamic> _identificationResults = []; // iNaturalist raw results
+  List<dynamic> _identificationResults = [];
   String? _identificationError;
 
-  // List to hold confirmed identifications by the user
   final List<ConfirmedIdentification> _confirmedIdentifications = [];
-
-  // State to manage selected suggestions for confirmation
   final Set<int> _selectedSuggestionIndices = {};
 
-  // --- Zoom related variables ---
   double _minZoomLevel = 1.0;
   double _maxZoomLevel = 1.0;
   double _currentZoomLevel = 1.0;
-  double _initialZoomLevel = 1.0; // To store zoom at start of gesture
-
+  double _initialZoomLevel = 1.0;
 
   @override
   void initState() {
@@ -48,35 +41,29 @@ class _ScannerScreenState extends State<ScannerScreen> {
     try {
       _cameras = await availableCameras();
       if (_cameras == null || _cameras!.isEmpty) {
-        debugPrint('No cameras found.');
         _showSnackBar('No cameras found on this device.');
         return;
       }
       CameraDescription selectedCamera = _cameras!.firstWhere(
             (camera) => camera.lensDirection == CameraLensDirection.back,
-        orElse: () => _cameras![0], // Fallback to first camera if no back camera
+        orElse: () => _cameras![0],
       );
 
       _controller = CameraController(
         selectedCamera,
-        ResolutionPreset.high, // Changed to high for better scan quality
+        ResolutionPreset.high,
         enableAudio: false,
       );
 
       _initializeControllerFuture = _controller!.initialize().then((_) async {
-        if (!mounted) {
-          return;
-        }
-        // Get zoom levels after initialization
+        if (!mounted) return;
         _minZoomLevel = await _controller!.getMinZoomLevel();
         _maxZoomLevel = await _controller!.getMaxZoomLevel();
-        _currentZoomLevel = _minZoomLevel; // Start at minimum zoom
-        await _controller!.setZoomLevel(_currentZoomLevel); // Apply initial zoom
-
-        setState(() {}); // Rebuild to show camera preview
+        _currentZoomLevel = _minZoomLevel;
+        await _controller!.setZoomLevel(_currentZoomLevel);
+        setState(() {});
       });
     } on CameraException catch (e) {
-      debugPrint('Error initializing camera: $e');
       _showSnackBar('Error initializing camera: ${e.description}');
     }
   }
@@ -90,69 +77,38 @@ class _ScannerScreenState extends State<ScannerScreen> {
   }
 
   Future<void> _takePicture() async {
-    if (_controller == null || !_controller!.value.isInitialized) {
-      debugPrint('Controller not initialized.');
-      _showSnackBar('Camera not ready.');
-      return;
-    }
-    if (_controller!.value.isTakingPicture) {
-      return;
-    }
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    if (_controller!.value.isTakingPicture) return;
 
     try {
       setState(() {
-        _isProcessingImage = true; // Start loading indicator
-        _identificationError = null; // Clear previous errors
-        _identificationResults = []; // Clear previous results
-        _selectedSuggestionIndices.clear(); // Clear selections
+        _isProcessingImage = true;
+        _identificationError = null;
+        _identificationResults = [];
+        _selectedSuggestionIndices.clear();
       });
 
-      await _initializeControllerFuture; // Wait for controller to initialize
-      final image = await _controller!.takePicture(); // Take the picture
-
-      // Get a temporary directory to store the image
-      final directory = await getTemporaryDirectory();
-      final path = join(directory.path, '${DateTime.now()}.jpg'); // Save as JPG
+      await _initializeControllerFuture;
+      final image = await _controller!.takePicture();
+      final path = join((await getTemporaryDirectory()).path, '${DateTime.now()}.jpg');
       await image.saveTo(path);
 
-      setState(() {
-        _imagePath = path; // Store the path to display/process later
-      });
+      setState(() => _imagePath = path);
 
-      debugPrint('Picture taken and saved to: $_imagePath');
-
-      // --- Integrate iNaturalist API call here ---
       final inatService = INaturalistService();
-      try {
-        debugPrint('Attempting iNaturalist API call...');
-        final results = await inatService.identifyImage(File(path));
-        setState(() {
-          _identificationResults = results;
-        });
-        debugPrint('iNaturalist Results: $results');
-        if (results.isEmpty) {
-          _showSnackBar('No identification results found.');
-        } else {
-          _showSnackBar('Identification complete! Review suggestions.');
-        }
-      } catch (e) {
-        setState(() {
-          // Ensure we display the specific error message from the service
-          _identificationError = e.toString().replaceFirst('Exception: ', '');
-        });
-        debugPrint('Identification error caught in ScannerScreen: $e');
-        _showSnackBar('Identification failed: ${e.toString().replaceFirst('Exception: ', '')}');
-      }
-
-    } on CameraException catch (e) {
-      debugPrint('Error taking picture: $e');
-      _showSnackBar('Error taking picture: ${e.description}');
+      final results = await inatService.identifyImage(File(path));
+      setState(() {
+        _identificationResults = results;
+        if (results.isEmpty) _showSnackBar('No identification results found.');
+      });
+    } catch (e) {
+      setState(() {
+        _identificationError = e.toString().replaceFirst('Exception: ', '');
+      });
+      _showSnackBar('Identification failed: $_identificationError');
     } finally {
-      // ** NEW: Ensure processing state is always reset **
       if (mounted) {
-        setState(() {
-          _isProcessingImage = false;
-        });
+        setState(() => _isProcessingImage = false);
       }
     }
   }
@@ -171,25 +127,26 @@ class _ScannerScreenState extends State<ScannerScreen> {
       final int taxonId = taxon['id'];
       final String imageUrl = taxon['default_photo'] != null ? taxon['default_photo']['url'] : '';
 
-      _confirmedIdentifications.add(
-        ConfirmedIdentification(
-          commonName: commonName,
-          scientificName: scientificName,
-          taxonId: taxonId,
-          imageUrl: imageUrl,
-        ),
-      );
+      // Avoid adding duplicates
+      if (!_confirmedIdentifications.any((item) => item.taxonId == taxonId)) {
+        _confirmedIdentifications.add(
+          ConfirmedIdentification(
+            commonName: commonName,
+            scientificName: scientificName,
+            taxonId: taxonId,
+            imageUrl: imageUrl,
+          ),
+        );
+      }
     }
-    // Clear results and selections after confirmation, ready for next scan
+
+    // ** FIX: Clear results to go back to camera, but keep confirmed items **
     setState(() {
+      _showSnackBar('Confirmed ${_selectedSuggestionIndices.length} item(s)!');
       _identificationResults.clear();
       _selectedSuggestionIndices.clear();
-      _imagePath = null; // Clear image preview too
-      _showSnackBar('Confirmed ${_selectedSuggestionIndices.length} item(s)!');
-      debugPrint('Confirmed Identifications: ${_confirmedIdentifications.map((e) => e.commonName).toList()}');
+      _imagePath = null; // Go back to camera preview
     });
-    // Here you would typically push _confirmedIdentifications to your
-    // data collection mechanism (e.g., a temporary list for the current beach session)
   }
 
   void _clearResults() {
@@ -201,28 +158,16 @@ class _ScannerScreenState extends State<ScannerScreen> {
     });
   }
 
-  // --- Zoom Gesture Handlers ---
   void _handleScaleStart(ScaleStartDetails details) {
     _initialZoomLevel = _currentZoomLevel;
   }
 
   void _handleScaleUpdate(ScaleUpdateDetails details) {
-    if (_controller == null || !_controller!.value.isInitialized) {
-      return;
-    }
-
-    // Calculate the new zoom level based on the initial zoom and the scale gesture
-    double newZoomLevel = _initialZoomLevel * details.scale;
-
-    // Clamp the zoom level to the camera's min and max zoom levels
-    newZoomLevel = newZoomLevel.clamp(_minZoomLevel, _maxZoomLevel);
-
-    // Only update if the zoom level has actually changed significantly
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    double newZoomLevel = (_initialZoomLevel * details.scale).clamp(_minZoomLevel, _maxZoomLevel);
     if ((newZoomLevel - _currentZoomLevel).abs() > 0.005) {
       _controller!.setZoomLevel(newZoomLevel);
-      setState(() {
-        _currentZoomLevel = newZoomLevel;
-      });
+      setState(() => _currentZoomLevel = newZoomLevel);
     }
   }
 
@@ -234,251 +179,157 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_initializeControllerFuture == null || _controller == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
-    return FutureBuilder<void>(
-      future: _initializeControllerFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.done) {
-          if (_controller!.value.isInitialized) {
-            final mediaSize = MediaQuery.of(context).size;
-            final cameraAspectRatio = _controller!.value.aspectRatio;
-
-            double scale = cameraAspectRatio / (mediaSize.width / mediaSize.height);
-            if (cameraAspectRatio < mediaSize.width / mediaSize.height) {
-              scale = (mediaSize.height / mediaSize.width) / cameraAspectRatio; // Corrected calculation
-            }
-
-            return Stack(
-              children: [
-                // Camera Preview filling the entire screen without distortion
-                ClipRect(
-                  child: OverflowBox(
-                    maxWidth: double.infinity,
-                    maxHeight: double.infinity,
-                    alignment: Alignment.center,
-                    child: SizedBox(
-                      width: mediaSize.width * scale,
-                      height: mediaSize.height * scale,
-                      // --- Wrap CameraPreview in GestureDetector for zoom ---
-                      child: GestureDetector(
-                        onScaleStart: _handleScaleStart,
-                        onScaleUpdate: _handleScaleUpdate,
-                        child: CameraPreview(_controller!),
-                      ),
-                      // --- End GestureDetector wrap ---
-                    ),
-                  ),
-                ),
-
-                // Processing Indicator
-                if (_isProcessingImage)
-                  Container(
-                    color: Colors.black.withOpacity(0.5),
-                    alignment: Alignment.center,
-                    child: const CircularProgressIndicator(color: Colors.white),
-                  ),
-
-                // Error Message Overlay
-                if (_identificationError != null)
-                  Positioned.fill(
-                    child: Container(
-                      color: Colors.black.withOpacity(0.7),
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(16.0),
-                          child: Text(
-                            'Error: $_identificationError',
-                            style: const TextStyle(color: Colors.redAccent, fontSize: 18),
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Identification Results Overlay (for confirmation)
-                if (_identificationResults.isNotEmpty && !_isProcessingImage)
-                  Positioned(
-                    top: MediaQuery.of(context).padding.top + 10,
-                    left: 10,
-                    right: 10,
-                    bottom: 10, // Extend to bottom to allow scroll
-                    child: Card(
-                      color: Theme.of(context).cardTheme.color?.withOpacity(0.9) ?? Colors.white.withOpacity(0.9),
-                      margin: EdgeInsets.zero,
-                      shape: Theme.of(context).cardTheme.shape,
-                      child: Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Confirm Identified Species:',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18, color: Theme.of(context).appBarTheme.foregroundColor),
-                            ),
-                            const SizedBox(height: 8),
-                            Expanded( // Use Expanded to make the list scrollable
-                              child: ListView.builder(
-                                shrinkWrap: true, // Important for nested list views
-                                itemCount: _identificationResults.length,
-                                itemBuilder: (context, index) {
-                                  final result = _identificationResults[index];
-                                  final taxon = result['taxon'];
-                                  final String name = taxon['preferred_common_name'] ?? taxon['name'] ?? 'Unknown';
-                                  final String scientificName = taxon['name'] ?? '';
-                                  final double score = result['score'] ?? 0.0;
-                                  final String photoUrl = taxon['default_photo'] != null ? taxon['default_photo']['url'] : '';
-
-                                  final bool isSelected = _selectedSuggestionIndices.contains(index);
-
-                                  return InkWell(
-                                    onTap: () {
-                                      setState(() {
-                                        if (isSelected) {
-                                          _selectedSuggestionIndices.remove(index);
-                                        } else {
-                                          _selectedSuggestionIndices.add(index);
-                                        }
-                                      });
-                                    },
-                                    child: Card(
-                                      color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.7) : Colors.grey[200],
-                                      margin: const EdgeInsets.symmetric(vertical: 4.0),
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(8.0),
-                                        child: Row(
-                                          children: [
-                                            if (photoUrl.isNotEmpty)
-                                              ClipRRect(
-                                                borderRadius: BorderRadius.circular(4),
-                                                child: Image.network(
-                                                  photoUrl,
-                                                  width: 50,
-                                                  height: 50,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) =>
-                                                  const Icon(Icons.broken_image, size: 50),
-                                                ),
-                                              )
-                                            else
-                                              Icon(Icons.image_not_supported, size: 50, color: Colors.grey[600]),
-                                            const SizedBox(width: 10),
-                                            Expanded(
-                                              child: Column(
-                                                crossAxisAlignment: CrossAxisAlignment.start,
-                                                children: [
-                                                  Text(
-                                                    name,
-                                                    style: TextStyle(
-                                                        fontWeight: FontWeight.bold,
-                                                        color: isSelected ? Colors.white : Colors.black87),
-                                                  ),
-                                                  Text(
-                                                    scientificName,
-                                                    style: TextStyle(
-                                                        fontStyle: FontStyle.italic,
-                                                        fontSize: 12,
-                                                        color: isSelected ? Colors.white70 : Colors.black54),
-                                                  ),
-                                                  Text(
-                                                    'Confidence: ${(score * 100).toStringAsFixed(1)}%',
-                                                    style: TextStyle(
-                                                        fontSize: 12,
-                                                        color: isSelected ? Colors.white70 : Colors.black54),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                            if (isSelected) Icon(Icons.check_circle, color: Theme.of(context).colorScheme.secondary),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceAround,
-                              children: [
-                                ElevatedButton(
-                                  onPressed: _selectedSuggestionIndices.isEmpty ? null : _confirmSelectedIdentifications,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Theme.of(context).floatingActionButtonTheme.backgroundColor,
-                                    foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor,
-                                  ),
-                                  child: Text('Confirm (${_selectedSuggestionIndices.length})'),
-                                ),
-                                ElevatedButton(
-                                  onPressed: _clearResults,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.grey,
-                                    foregroundColor: Colors.white,
-                                  ),
-                                  child: const Text('Cancel'),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-
-                // Camera capture button (remains at the bottom)
-                Positioned(
-                  bottom: 20.0,
-                  left: 0,
-                  right: 0,
-                  child: Center(
-                    child: FloatingActionButton(
-                      onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture,
-                      backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
-                          ? Colors.grey // Dim button while disabled
-                          : Theme.of(context).floatingActionButtonTheme.backgroundColor,
-                      foregroundColor: Theme.of(context).floatingActionButtonTheme.foregroundColor, // Disable button while processing or showing results
-                      child: _isProcessingImage
-                          ? const CircularProgressIndicator(color: Colors.white)
-                          : const Icon(Icons.camera_alt),
-                    ),
-                  ),
-                ),
-                // Display captured image (for testing purposes, hidden when results show)
-                if (_imagePath != null && !_isProcessingImage && _identificationResults.isEmpty && _identificationError == null)
-                  Positioned(
-                    top: MediaQuery.of(context).padding.top + 20,
-                    right: 20,
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        border: Border.all(color: Colors.white, width: 2),
-                        borderRadius: BorderRadius.circular(8),
-                        color: Colors.black.withOpacity(0.5),
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.file(
-                          File(_imagePath!),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            );
-          } else {
-            return const Center(child: Text('Failed to initialize camera.'));
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scanner'),
+        // ** NEW: "Done" button appears when you have confirmed items **
+        actions: [
+          if (_confirmedIdentifications.isNotEmpty)
+            TextButton(
+              onPressed: () {
+                // Return the confirmed data to the previous screen
+                Navigator.of(context).pop(_confirmedIdentifications);
+              },
+              child: Text(
+                'Done (${_confirmedIdentifications.length})',
+                style: TextStyle(color: Theme.of(context).appBarTheme.foregroundColor),
+              ),
+            )
+        ],
+      ),
+      body: FutureBuilder<void>(
+        future: _initializeControllerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
           }
-        } else {
-          return const Center(child: CircularProgressIndicator());
-        }
-      },
+          return Stack(
+            children: [
+              GestureDetector(
+                onScaleStart: _handleScaleStart,
+                onScaleUpdate: _handleScaleUpdate,
+                child: CameraPreview(_controller!),
+              ),
+              // ** NEW: Display confirmed items at the bottom **
+              if (_confirmedIdentifications.isNotEmpty)
+                Positioned(
+                  bottom: 90,
+                  left: 10,
+                  right: 10,
+                  child: Card(
+                    color: Colors.black.withOpacity(0.7),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Wrap(
+                        spacing: 8.0,
+                        runSpacing: 4.0,
+                        children: _confirmedIdentifications.map((item) {
+                          return Chip(
+                            label: Text(item.commonName, style: const TextStyle(color: Colors.white)),
+                            backgroundColor: Theme.of(context).primaryColor,
+                            onDeleted: () {
+                              setState(() {
+                                _confirmedIdentifications.remove(item);
+                              });
+                            },
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                ),
+              if (_isProcessingImage)
+                Container(
+                  color: Colors.black.withOpacity(0.5),
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(color: Colors.white),
+                ),
+              if (_identificationResults.isNotEmpty && !_isProcessingImage)
+                _buildResultsOverlay(),
+              Positioned(
+                bottom: 20.0,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: FloatingActionButton(
+                    onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture,
+                    backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
+                        ? Colors.grey
+                        : Theme.of(context).floatingActionButtonTheme.backgroundColor,
+                    child: _isProcessingImage
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Icon(Icons.camera_alt),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildResultsOverlay() {
+    return Positioned.fill(
+      child: Card(
+        margin: const EdgeInsets.all(16).copyWith(bottom: 90),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            children: [
+              Text('Confirm Identified Species:', style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Expanded(
+                child: ListView.builder(
+                  itemCount: _identificationResults.length,
+                  itemBuilder: (context, index) {
+                    final result = _identificationResults[index];
+                    final taxon = result['taxon'];
+                    final name = taxon['preferred_common_name'] ?? taxon['name'] ?? 'Unknown';
+                    final photoUrl = taxon['default_photo']?['url'] ?? '';
+                    final isSelected = _selectedSuggestionIndices.contains(index);
+
+                    return Card(
+                      color: isSelected ? Theme.of(context).primaryColor.withOpacity(0.3) : null,
+                      child: ListTile(
+                        onTap: () {
+                          setState(() {
+                            if (isSelected) {
+                              _selectedSuggestionIndices.remove(index);
+                            } else {
+                              _selectedSuggestionIndices.add(index);
+                            }
+                          });
+                        },
+                        leading: photoUrl.isNotEmpty
+                            ? Image.network(photoUrl, width: 50, height: 50, fit: BoxFit.cover)
+                            : const Icon(Icons.image_not_supported, size: 50),
+                        title: Text(name),
+                        trailing: isSelected ? const Icon(Icons.check_circle) : null,
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  ElevatedButton(
+                    onPressed: _selectedSuggestionIndices.isEmpty ? null : _confirmSelectedIdentifications,
+                    child: Text('Confirm (${_selectedSuggestionIndices.length})'),
+                  ),
+                  ElevatedButton(
+                    onPressed: _clearResults,
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.grey),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
