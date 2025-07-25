@@ -473,12 +473,14 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           imageUrls: mainImageUrls,
           timestamp: Timestamp.now(),
           lastAggregated: Timestamp.now(),
-          totalContributions: 1,
-          aggregatedMetrics: _getAggregatedMetricsFromContribution(contribution),
-          aggregatedSingleChoices: _getAggregatedSingleChoicesFromContribution(contribution),
-          aggregatedMultiChoices: _getAggregatedMultiChoicesFromContribution(contribution),
-          aggregatedTextItems: _getAggregatedTextItemsFromContribution(contribution),
-          identifiedFloraFauna: _getAggregatedFloraFauna(contribution),
+          // *** FIX: Initialize counts and maps as empty/zero ***
+          totalContributions: 0,
+          aggregatedMetrics: {},
+          aggregatedSingleChoices: {},
+          aggregatedMultiChoices: {},
+          aggregatedTextItems: {},
+          identifiedFloraFauna: {},
+          // ******************************************************
           identifiedRockTypesComposition: {},
           identifiedBeachComposition: {},
           discoveryQuestions: [],
@@ -508,72 +510,13 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     }
   }
 
-  // --- Helper methods to get aggregated data for the *first* contribution ---
-  Map<String, double> _getAggregatedMetricsFromContribution(Contribution contribution) {
-    Map<String, double> metrics = {};
-    for (var field in _formFields) {
-      if ((field.type == InputFieldType.slider || field.type == InputFieldType.number) &&
-          contribution.userAnswers.containsKey(field.label)) {
-        final value = contribution.userAnswers[field.label];
-        if (value != null && value is num) {
-          metrics[field.label] = value.toDouble();
-        }
-      }
-    }
-    return metrics;
-  }
-
-  Map<String, Map<String, dynamic>> _getAggregatedSingleChoicesFromContribution(Contribution contribution) {
-    Map<String, Map<String, dynamic>> choices = {};
-    for (var field in _formFields) {
-      if (field.type == InputFieldType.singleChoice && contribution.userAnswers.containsKey(field.label)) {
-        final value = contribution.userAnswers[field.label];
-        if (value != null && value is String) {
-          choices[field.label] = {value: 1};
-        }
-      }
-    }
-    return choices;
-  }
-
-  Map<String, Map<String, dynamic>> _getAggregatedMultiChoicesFromContribution(Contribution contribution) {
-    Map<String, Map<String, dynamic>> choices = {};
-    for (var field in _formFields) {
-      if (field.type == InputFieldType.multiChoice && contribution.userAnswers.containsKey(field.label)) {
-        final value = contribution.userAnswers[field.label];
-        if (value != null && value is List<String>) {
-          choices[field.label] = {for (var item in value) item: 1};
-        }
-      }
-    }
-    return choices;
-  }
-
-  Map<String, List<String>> _getAggregatedTextItemsFromContribution(Contribution contribution) {
-    Map<String, List<String>> textItems = {};
-    for (var field in _formFields) {
-      bool isBasicDetail = ['Beach Name', 'Short Description', 'Country', 'Province', 'Municipality'].contains(field.label);
-      if (field.type == InputFieldType.text && contribution.userAnswers.containsKey(field.label) && !isBasicDetail) {
-        final value = contribution.userAnswers[field.label];
-        if (value != null) {
-          textItems[field.label] = List<String>.from(value);
-        }
-      }
-    }
-    return textItems;
-  }
-
-  Map<String, Map<String, dynamic>> _getAggregatedFloraFauna(Contribution contribution) {
-    Map<String, Map<String, dynamic>> floraFauna = {};
-    for (var confirmed in contribution.aiConfirmedFloraFauna) {
-      floraFauna[confirmed.commonName] = {
-        'count': 1,
-        'taxonId': confirmed.taxonId,
-        'imageUrl': confirmed.imageUrl,
-      };
-    }
-    return floraFauna;
-  }
+  // ** These helper methods are no longer needed here as the cloud function handles all aggregation **
+  // You can safely delete them.
+  // _getAggregatedMetricsFromContribution
+  // _getAggregatedSingleChoicesFromContribution
+  // _getAggregatedMultiChoicesFromContribution
+  // _getAggregatedTextItemsFromContribution
+  // _getAggregatedFloraFauna
 
   // This is the function that will be called when a pop is attempted.
   Future<bool> _showExitConfirmationDialog() async {
