@@ -29,23 +29,35 @@ exports.aggregateContribution = onDocumentCreated(
         lastAggregated: FieldValue.serverTimestamp(),
       };
 
-      // --- Amalgamate Aggregated Metrics ---
+      // --- Amalgamate User Answers ---
       const userAnswers = contribution.userAnswers || {};
       for (const key in userAnswers) {
         const newValue = userAnswers[key];
+
+        // Handle numeric metrics (averaging)
         if (typeof newValue === 'number') {
           const currentMetricValue = beachData.aggregatedMetrics[key] || 0;
           const newAverage = ((currentMetricValue * oldTotalContributions) + newValue) / newTotalContributions;
           updates[`aggregatedMetrics.${key}`] = newAverage;
         }
+
+        // Handle single-choice answers (counting occurrences)
+        else if (typeof newValue === 'string' && key !== 'Short Description') {
+          updates[`aggregatedSingleChoices.${key}.${newValue}`] = FieldValue.increment(1);
+        }
+
+        // Handle multi-choice answers (counting occurrences)
+        else if (Array.isArray(newValue) && newValue.every(item => typeof item === 'string')) {
+          newValue.forEach(option => {
+            updates[`aggregatedMultiChoices.${key}.${option}`] = FieldValue.increment(1);
+          });
+        }
       }
 
       // --- Update Array Fields Safely ---
-      // ** FIX: Only call arrayUnion if there are new images to add **
       if (contribution.contributedImageUrls && contribution.contributedImageUrls.length > 0) {
         updates.imageUrls = FieldValue.arrayUnion(...contribution.contributedImageUrls);
       }
-      // ** FIX: Only call arrayUnion if a new description exists **
       if (userAnswers["Short Description"]) {
         updates.contributedDescriptions = FieldValue.arrayUnion(userAnswers["Short Description"]);
       }
@@ -53,9 +65,7 @@ exports.aggregateContribution = onDocumentCreated(
       // --- Update Flora/Fauna Counts ---
       if (contribution.aiConfirmedFloraFauna) {
         for (const item of contribution.aiConfirmedFloraFauna) {
-            // Use dot notation to safely increment the count for a specific species
             updates[`identifiedFloraFauna.${item.commonName}.count`] = FieldValue.increment(1);
-            // Set the taxonId and imageUrl if they don't exist yet
             updates[`identifiedFloraFauna.${item.commonName}.taxonId`] = item.taxonId;
             updates[`identifiedFloraFauna.${item.commonName}.imageUrl`] = item.imageUrl;
         }

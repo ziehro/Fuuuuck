@@ -16,8 +16,8 @@ class Beach {
   final Timestamp lastAggregated; // When aggregation was last run
   final int totalContributions;
   final Map<String, double> aggregatedMetrics;
-  final Map<String, String> aggregatedSingleChoices;
-  final Map<String, List<String>> aggregatedMultiChoices;
+  final Map<String, Map<String, dynamic>> aggregatedSingleChoices;
+  final Map<String, Map<String, dynamic>> aggregatedMultiChoices;
   final Map<String, List<String>> aggregatedTextItems;
   // This is the correct field name
   final Map<String, Map<String, dynamic>> identifiedFloraFauna;
@@ -75,8 +75,8 @@ class Beach {
       lastAggregated: data['lastAggregated'] as Timestamp? ?? Timestamp.now(),
       totalContributions: data['totalContributions'] as int? ?? 0,
       aggregatedMetrics: (data['aggregatedMetrics'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
-      aggregatedSingleChoices: Map<String, String>.from(data['aggregatedSingleChoices'] ?? {}),
-      aggregatedMultiChoices: (data['aggregatedMultiChoices'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<String>.from(v ?? []))) ?? {},
+      aggregatedSingleChoices: Map<String, Map<String, dynamic>>.from(data['aggregatedSingleChoices'] ?? {}),
+      aggregatedMultiChoices: Map<String, Map<String, dynamic>>.from(data['aggregatedMultiChoices'] ?? {}),
       aggregatedTextItems: (data['aggregatedTextItems'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<String>.from(v ?? []))) ?? {},
       identifiedFloraFauna: Map<String, Map<String, dynamic>>.from(data['identifiedFloraFauna'] ?? {}),
       identifiedRockTypesComposition: (data['identifiedRockTypesComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},

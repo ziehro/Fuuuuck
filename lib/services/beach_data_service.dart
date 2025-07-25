@@ -44,9 +44,29 @@ class BeachDataService {
   Future<void> addContribution({
     required String beachId,
     required Contribution contribution,
+    required double? userLatitude,
+    required double? userLongitude,
   }) async {
+    if (userLatitude == null || userLongitude == null) {
+      throw Exception('Could not determine user location.');
+    }
+
     try {
       final DocumentReference beachDocRef = _firestore.collection('beaches').doc(beachId);
+      final beachSnapshot = await beachDocRef.get();
+
+      if (!beachSnapshot.exists) {
+        throw Exception('Beach not found.');
+      }
+
+      final beach = Beach.fromFirestore(beachSnapshot);
+      final geoHasher = GeoHasher();
+      final userGeohash = geoHasher.encode(userLongitude, userLatitude, precision: 9);
+
+      if (userGeohash != beach.geohash) {
+        throw Exception('You must be at the beach to make a contribution.');
+      }
+
       await beachDocRef.collection('contributions').add(contribution.toMap());
     } catch (e) {
       print('Error adding contribution: $e');

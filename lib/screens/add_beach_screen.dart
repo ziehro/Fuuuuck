@@ -410,6 +410,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         await beachDataService.addContribution(
           beachId: widget.beachId!,
           contribution: contribution,
+          userLatitude: _currentLocation?.latitude,
+          userLongitude: _currentLocation?.longitude,
         );
         _showSnackBar('Contribution added successfully!');
       } else {
@@ -477,27 +479,26 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     return metrics;
   }
 
-  Map<String, String> _getAggregatedSingleChoicesFromContribution(Contribution contribution) {
-    Map<String, String> choices = {};
+  Map<String, Map<String, dynamic>> _getAggregatedSingleChoicesFromContribution(Contribution contribution) {
+    Map<String, Map<String, dynamic>> choices = {};
     for (var field in _formFields) {
       if (field.type == InputFieldType.singleChoice && contribution.userAnswers.containsKey(field.label)) {
-        // Corrected line: Only add the value if it's not null.
         final value = contribution.userAnswers[field.label];
         if (value != null && value is String) {
-          choices[field.label] = value;
+          choices[field.label] = {value: 1};
         }
       }
     }
     return choices;
   }
 
-  Map<String, List<String>> _getAggregatedMultiChoicesFromContribution(Contribution contribution) {
-    Map<String, List<String>> choices = {};
+  Map<String, Map<String, dynamic>> _getAggregatedMultiChoicesFromContribution(Contribution contribution) {
+    Map<String, Map<String, dynamic>> choices = {};
     for (var field in _formFields) {
       if (field.type == InputFieldType.multiChoice && contribution.userAnswers.containsKey(field.label)) {
         final value = contribution.userAnswers[field.label];
-        if (value != null) {
-          choices[field.label] = List<String>.from(value);
+        if (value != null && value is List<String>) {
+          choices[field.label] = {for (var item in value) item: 1};
         }
       }
     }

@@ -172,10 +172,20 @@ class BeachDetailScreen extends StatelessWidget {
           }),
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'Single-Choice Answers'),
-          ...beach.aggregatedSingleChoices.entries.map((entry) => _buildDataRow(entry.key, entry.value)),
+          ...beach.aggregatedSingleChoices.entries.map((entry) {
+            final choices = (entry.value).entries.toList()
+              ..sort((a, b) => (b.value as int).compareTo(a.value as int));
+            final displayText = choices.map((choice) => '${choice.key}: ${choice.value}').join(', ');
+            return _buildDataRow(entry.key, displayText);
+          }),
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'Multi-Choice Answers'),
-          ...beach.aggregatedMultiChoices.entries.map((entry) => _buildDataRow(entry.key, entry.value.join(', '))),
+          ...beach.aggregatedMultiChoices.entries.map((entry) {
+            final choices = (entry.value).entries.toList()
+              ..sort((a, b) => (b.value as int).compareTo(a.value as int));
+            final displayText = choices.map((choice) => '${choice.key}: ${choice.value}').join(', ');
+            return _buildDataRow(entry.key, displayText);
+          }),
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'AI Identified Flora & Fauna'),
           if (beach.identifiedFloraFauna.isEmpty)
