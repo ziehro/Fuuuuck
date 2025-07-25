@@ -1,4 +1,3 @@
-// lib/screens/beach_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fuuuuck/models/beach_model.dart';
@@ -12,6 +11,22 @@ class BeachDetailScreen extends StatelessWidget {
   final String beachId;
 
   const BeachDetailScreen({super.key, required this.beachId});
+
+  // --- Metric Category Keys ---
+  static const List<String> floraMetricKeys = [
+    'Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach'
+  ];
+  static const List<String> woodMetricKeys = [
+    'Kindling', 'Firewood', 'Logs', 'Trees'
+  ];
+  static const List<String> faunaMetricKeys = [
+    'Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels'
+  ];
+  static const List<String> compositionOrderedKeys = [
+    'Width', 'Length', 'Sand', 'Pebbles', 'Baseball Rocks', 'Rocks', 'Boulders', 'Stone', 'Coal', 'Mud', 'Midden', 'Islands', 'Bluff Height', 'Bluffs Grade'
+  ];
+  // --- End of Keys ---
+
 
   void _showFloraFaunaDetailsDialog(BuildContext context, String name, Map<String, dynamic> details) {
     final String imageUrl = details['imageUrl'] ?? '';
@@ -63,6 +78,36 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
+  void _showEducationalInfoDialog(BuildContext context, Beach beach) {
+    showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('Educational Information'),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(beach.educationalInfo.isNotEmpty ? beach.educationalInfo : 'No educational information available yet.', style: Theme.of(context).textTheme.bodyLarge),
+                  const SizedBox(height: 24),
+                  _buildCategoryTitle(context, 'Discovery Scavenger Hunt'),
+                  if (beach.discoveryQuestions.isEmpty)
+                    Text('No scavenger hunt questions for this beach yet.', style: Theme.of(context).textTheme.bodyMedium)
+                  else
+                    ...beach.discoveryQuestions.map((question) => ListTile(leading: const Icon(Icons.explore), title: Text(question))),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Close'),
+              ),
+            ],
+          );
+        });
+  }
+
   @override
   Widget build(BuildContext context) {
     final beachDataService = Provider.of<BeachDataService>(context);
@@ -79,8 +124,10 @@ class BeachDetailScreen extends StatelessWidget {
           }
 
           final beach = snapshot.data!;
+          final dataTabs = _buildDataTabs(context, beach);
+
           return DefaultTabController(
-            length: 2,
+            length: dataTabs.keys.length,
             child: NestedScrollView(
               headerSliverBuilder: (context, innerBoxIsScrolled) {
                 return [
@@ -109,29 +156,42 @@ class BeachDetailScreen extends StatelessWidget {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: ElevatedButton.icon(
-                        icon: const Icon(Icons.add_location_alt),
-                        label: const Text('Add Your Contribution'),
-                        onPressed: () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => AddBeachScreen(
-                              beachId: beach.id,
-                              initialLocation: LatLng(beach.latitude, beach.longitude),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.add_location_alt),
+                              label: const Text('Contribute'),
+                              onPressed: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => AddBeachScreen(
+                                    beachId: beach.id,
+                                    initialLocation: LatLng(beach.latitude, beach.longitude),
+                                  ),
+                                ),
+                              ),
+                              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
                             ),
                           ),
-                        ),
-                        style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              icon: const Icon(Icons.school),
+                              label: const Text('Education'),
+                              onPressed: () => _showEducationalInfoDialog(context, beach),
+                              style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12)),
+                            ),
+                          )
+                        ],
                       ),
                     ),
                   ),
                   SliverPersistentHeader(
                     delegate: _SliverAppBarDelegate(
-                      const TabBar(
-                        tabs: [
-                          Tab(icon: Icon(Icons.data_usage), text: 'Current Data'),
-                          Tab(icon: Icon(Icons.school), text: 'Educational Info'),
-                        ],
+                      TabBar(
+                        isScrollable: true,
+                        tabs: dataTabs.keys.map((title) => Tab(text: title)).toList(),
                       ),
                     ),
                     pinned: true,
@@ -139,10 +199,7 @@ class BeachDetailScreen extends StatelessWidget {
                 ];
               },
               body: TabBarView(
-                children: [
-                  _buildCurrentDataTab(context, beach),
-                  _buildEducationalInfoTab(context, beach),
-                ],
+                children: dataTabs.values.toList(),
               ),
             ),
           );
@@ -151,75 +208,181 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCurrentDataTab(BuildContext context, Beach beach) {
+  Map<String, Widget> _buildDataTabs(BuildContext context, Beach beach) {
+    return {
+      'Flora': _buildFloraTab(context, beach),
+      'Fauna': _buildFaunaTab(context, beach),
+      'Wood': _buildWoodTab(context, beach),
+      'Composition': _buildCompositionTab(context, beach),
+      'Other': _buildOtherTab(context, beach),
+      'Identifications': _buildIdTab(context, beach),
+    };
+  }
+
+  Widget _buildFloraTab(BuildContext context, Beach beach) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: _buildMetricsCategoryTab(context, beach, floraMetricKeys),
+    );
+  }
+
+  Widget _buildFaunaTab(BuildContext context, Beach beach) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildCategoryTitle(context, 'General Metrics'),
-          ...beach.aggregatedMetrics.entries.map((entry) {
-            final range = metricRanges[entry.key];
-            if (range != null) {
-              return MetricScaleBar(
-                label: entry.key,
-                value: entry.value,
-                min: range.min.toDouble(),
-                max: range.max.toDouble(),
-              );
-            }
-            return _buildDataRow(entry.key, entry.value.toStringAsFixed(2));
-          }),
+          _buildMetricsCategoryTab(context, beach, faunaMetricKeys),
           const SizedBox(height: 16),
-          _buildCategoryTitle(context, 'Single-Choice Answers'),
-          ...beach.aggregatedSingleChoices.entries.map((entry) {
-            final choices = (entry.value).entries.toList()
-              ..sort((a, b) => (b.value as int).compareTo(a.value as int));
-            final displayText = choices.map((choice) => '${choice.key}: ${choice.value}').join(', ');
-            return _buildDataRow(entry.key, displayText);
-          }),
-          const SizedBox(height: 16),
-          _buildCategoryTitle(context, 'Multi-Choice Answers'),
-          ...beach.aggregatedMultiChoices.entries.map((entry) {
-            final choices = (entry.value).entries.toList()
-              ..sort((a, b) => (b.value as int).compareTo(a.value as int));
-            final displayText = choices.map((choice) => '${choice.key}: ${choice.value}').join(', ');
-            return _buildDataRow(entry.key, displayText);
-          }),
-          const SizedBox(height: 16),
-          _buildCategoryTitle(context, 'AI Identified Flora & Fauna'),
-          if (beach.identifiedFloraFauna.isEmpty)
-            const Text('No flora or fauna identified yet.')
-          else
-            ...beach.identifiedFloraFauna.entries.map((entry) {
-              return InkWell(
-                onLongPress: () => _showFloraFaunaDetailsDialog(context, entry.key, entry.value),
-                child: _buildDataRow(entry.key, 'Count: ${entry.value['count']}'),
-              );
-            }),
-          const SizedBox(height: 16),
+          _buildCategoryTitle(context, 'Answers'),
+          if (beach.aggregatedMultiChoices.containsKey('Which Shells'))
+            _buildDataRow(
+              'Which Shells',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: (beach.aggregatedMultiChoices['Which Shells'] as Map<String, dynamic>).entries.map((e) => Text('${e.key}: ${e.value}')).toList(),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildEducationalInfoTab(BuildContext context, Beach beach) {
+  Widget _buildWoodTab(BuildContext context, Beach beach) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: _buildMetricsCategoryTab(context, beach, woodMetricKeys),
+    );
+  }
+
+  Widget _buildCompositionTab(BuildContext context, Beach beach) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildCategoryTitle(context, 'Educational Information'),
-          Text(beach.educationalInfo.isNotEmpty ? beach.educationalInfo : 'No educational information available yet.', style: Theme.of(context).textTheme.bodyLarge),
-          const SizedBox(height: 24),
-          _buildCategoryTitle(context, 'Discovery Scavenger Hunt'),
-          if (beach.discoveryQuestions.isEmpty)
-            Text('No scavenger hunt questions for this beach yet.', style: Theme.of(context).textTheme.bodyMedium)
-          else
-            ...beach.discoveryQuestions.map((question) => ListTile(leading: const Icon(Icons.explore), title: Text(question))),
+          _buildMetricsCategoryTab(context, beach, compositionOrderedKeys, isComposition: true),
+          const SizedBox(height: 16),
+          _buildCategoryTitle(context, 'Answers'),
+          if (beach.aggregatedSingleChoices.containsKey('Shape'))
+            _buildDataRow(
+              'Shape',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: (beach.aggregatedSingleChoices['Shape'] as Map<String, dynamic>).entries.map((e) => Text('${e.key}: ${e.value}')).toList(),
+              ),
+            ),
+          if (beach.aggregatedMultiChoices.containsKey('Bluff Comp'))
+            _buildDataRow(
+              'Bluff Comp',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: (beach.aggregatedMultiChoices['Bluff Comp'] as Map<String, dynamic>).entries.map((e) => Text('${e.key}: ${e.value}')).toList(),
+              ),
+            ),
+          if (beach.aggregatedSingleChoices.containsKey('Rock Type'))
+            _buildDataRow(
+              'Rock Type',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: (beach.aggregatedSingleChoices['Rock Type'] as Map<String, dynamic>).entries.map((e) => Text('${e.key}: ${e.value}')).toList(),
+              ),
+            ),
         ],
       ),
     );
+  }
+
+  Widget _buildOtherTab(BuildContext context, Beach beach) {
+    final otherSingleChoiceAnswers = Map.from(beach.aggregatedSingleChoices)..removeWhere((key, value) => ['Shape', 'Rock Type'].contains(key));
+    final otherMultiChoiceAnswers = Map.from(beach.aggregatedMultiChoices)..removeWhere((key, value) => ['Which Shells', 'Bluff Comp'].contains(key));
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildMetricsCategoryTab(context, beach, [], includeOther: true),
+          const SizedBox(height: 16),
+          _buildCategoryTitle(context, 'Answers'),
+          ...otherSingleChoiceAnswers.entries.map<Widget>((entry) {
+            final choices = (entry.value as Map<String, dynamic>).entries.toList()..sort((a, b) => (b.value as int).compareTo(a.value as int));
+            final answerWidgets = choices.map<Widget>((choice) => Text('${choice.key}: ${choice.value}')).toList();
+            return _buildDataRow(entry.key, Column(crossAxisAlignment: CrossAxisAlignment.end, children: answerWidgets));
+          }).toList(),
+          ...otherMultiChoiceAnswers.entries.map<Widget>((entry) {
+            final choices = (entry.value as Map<String, dynamic>).entries.toList()..sort((a, b) => (b.value as int).compareTo(a.value as int));
+            final answerWidgets = choices.map<Widget>((choice) => Text('${choice.key}: ${choice.value}')).toList();
+            return _buildDataRow(entry.key, Column(crossAxisAlignment: CrossAxisAlignment.end, children: answerWidgets));
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMetricsCategoryTab(BuildContext context, Beach beach, List<String> keys, {bool includeOther = false, bool isComposition = false}) {
+    final Map<String, double> filteredMetrics = {};
+
+    if (includeOther) {
+      final allKnownKeys = [...floraMetricKeys, ...faunaMetricKeys, ...compositionOrderedKeys, ...woodMetricKeys];
+      beach.aggregatedMetrics.forEach((key, value) {
+        if (!allKnownKeys.contains(key)) {
+          filteredMetrics[key] = value;
+        }
+      });
+    } else if (isComposition) {
+      for (var key in keys) {
+        if (beach.aggregatedMetrics.containsKey(key)) {
+          filteredMetrics[key] = beach.aggregatedMetrics[key]!;
+        }
+      }
+    } else {
+      beach.aggregatedMetrics.forEach((key, value) {
+        if (keys.contains(key)) {
+          filteredMetrics[key] = value;
+        }
+      });
+    }
+
+    if (filteredMetrics.isEmpty) {
+      return const Center(child: Text("No data for this category yet."));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: filteredMetrics.entries.map((entry) {
+        final range = metricRanges[entry.key];
+        if (range != null) {
+          return MetricScaleBar(
+            label: entry.key,
+            value: entry.value,
+            min: range.min.toDouble(),
+            max: range.max.toDouble(),
+          );
+        }
+        return _buildDataRow(entry.key, Text(entry.value.toStringAsFixed(2), textAlign: TextAlign.end));
+      }).toList(),
+    );
+  }
+
+  Widget _buildIdTab(BuildContext context, Beach beach) {
+    return SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildCategoryTitle(context, 'AI Identified Flora & Fauna'),
+            if (beach.identifiedFloraFauna.isEmpty)
+              const Text('No flora or fauna identified yet.')
+            else
+              ...beach.identifiedFloraFauna.entries.map((entry) {
+                return InkWell(
+                  onLongPress: () => _showFloraFaunaDetailsDialog(context, entry.key, entry.value),
+                  child: _buildDataRow(entry.key, Text('Count: ${entry.value['count']}', textAlign: TextAlign.end)),
+                );
+              }),
+          ],
+        ));
   }
 
   Widget _buildCategoryTitle(BuildContext context, String title) {
@@ -229,16 +392,17 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDataRow(String key, String value) {
+  Widget _buildDataRow(String key, Widget value) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: Padding(
         padding: const EdgeInsets.all(12.0),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Expanded(child: Text(key, style: const TextStyle(fontWeight: FontWeight.bold))),
-            Expanded(child: Text(value, textAlign: TextAlign.end)),
+            Expanded(flex: 2, child: Text(key, style: const TextStyle(fontWeight: FontWeight.bold))),
+            Expanded(flex: 3, child: value),
           ],
         ),
       ),
@@ -342,7 +506,7 @@ class MetricScaleBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final double percentage = (max > min) ? ((value - min) / (max - min)).clamp(0.0, 1.0) : 0.0;
-    final Color barColor = Color.lerp(Colors.red, Colors.green, percentage) ?? Colors.grey;
+    final Color barColor = Color.lerp(Colors.blue, Colors.green, percentage) ?? Colors.grey;
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),

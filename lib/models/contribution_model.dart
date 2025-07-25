@@ -5,6 +5,7 @@ import 'package:fuuuuck/models/confirmed_identification.dart'; // Import the new
 class Contribution {
   final String? id; // Document ID, nullable when creating a new one
   final String userId;
+  final String userEmail; // <-- ADD THIS LINE
   final Timestamp timestamp;
   final double latitude;
   final double longitude;
@@ -20,6 +21,7 @@ class Contribution {
   Contribution({
     this.id,
     required this.userId,
+    required this.userEmail, // <-- ADD THIS LINE
     required this.timestamp,
     required this.latitude,
     required this.longitude,
@@ -33,6 +35,7 @@ class Contribution {
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
+      'userEmail': userEmail, // <-- ADD THIS LINE
       'timestamp': timestamp,
       'latitude': latitude,
       'longitude': longitude,
@@ -49,6 +52,7 @@ class Contribution {
     return Contribution(
       id: doc.id,
       userId: data['userId'] as String,
+      userEmail: data['userEmail'] as String? ?? '', // <-- ADD THIS LINE (handle missing emails gracefully)
       timestamp: data['timestamp'] as Timestamp,
       latitude: (data['latitude'] as num).toDouble(),
       longitude: (data['longitude'] as num).toDouble(),

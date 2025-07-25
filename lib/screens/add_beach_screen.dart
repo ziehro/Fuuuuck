@@ -326,6 +326,28 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
 
   Future<void> _saveNewBeach() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmation'),
+        content: const Text('Are you sure you answered every question?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == null || !confirmed) {
+      return;
+    }
+
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
       _showSnackBar('Please fill in all required fields.');
@@ -336,9 +358,9 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
     final beachDataService = Provider.of<BeachDataService>(context, listen: false);
     final authService = Provider.of<AuthService>(context, listen: false);
-    final userId = authService.currentUser?.uid;
+    final user = authService.currentUser;
 
-    if (userId == null) {
+    if (user == null) {
       _showSnackBar('You must be logged in to add a beach.');
       return;
     }
@@ -394,7 +416,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
       // 2. Create the initial Contribution object
       final contribution = Contribution(
-        userId: userId,
+        userId: user.uid,
+        userEmail: user.email ?? '', // <-- ADD THIS LINE
         timestamp: Timestamp.now(),
         latitude: lat,
         longitude: lon,
