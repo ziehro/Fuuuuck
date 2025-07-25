@@ -10,6 +10,8 @@ class Contribution {
   final double latitude;
   final double longitude;
   final List<String> contributedImageUrls;
+  final List<String> localImagePaths; // New field for local paths
+  final bool isSynced; // New field to track sync status
 
   // Manual Answers - these directly mirror your old app's 'data' map
   final Map<String, dynamic> userAnswers; // This map will hold all the dynamic questions
@@ -21,11 +23,13 @@ class Contribution {
   Contribution({
     this.id,
     required this.userId,
-    required this.userEmail, // <-- ADD THIS LINE
+    required this.userEmail,
     required this.timestamp,
     required this.latitude,
     required this.longitude,
     this.contributedImageUrls = const [],
+    this.localImagePaths = const [], // Initialize in constructor
+    this.isSynced = true,            // Default to true for existing online data
     required this.userAnswers,
     this.aiConfirmedFloraFauna = const [],
     this.aiConfirmedRockTypes = const [],
@@ -35,11 +39,13 @@ class Contribution {
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
-      'userEmail': userEmail, // <-- ADD THIS LINE
+      'userEmail': userEmail,
       'timestamp': timestamp,
       'latitude': latitude,
       'longitude': longitude,
       'contributedImageUrls': contributedImageUrls,
+      'localImagePaths': localImagePaths, // Add to map
+      'isSynced': isSynced,              // Add to map
       'userAnswers': userAnswers,
       'aiConfirmedFloraFauna': aiConfirmedFloraFauna.map((e) => e.toMap()).toList(),
       'aiConfirmedRockTypes': aiConfirmedRockTypes.map((e) => e.toMap()).toList(),
@@ -52,11 +58,13 @@ class Contribution {
     return Contribution(
       id: doc.id,
       userId: data['userId'] as String,
-      userEmail: data['userEmail'] as String? ?? '', // <-- ADD THIS LINE (handle missing emails gracefully)
+      userEmail: data['userEmail'] as String? ?? '',
       timestamp: data['timestamp'] as Timestamp,
       latitude: (data['latitude'] as num).toDouble(),
       longitude: (data['longitude'] as num).toDouble(),
       contributedImageUrls: List<String>.from(data['contributedImageUrls'] ?? []),
+      localImagePaths: List<String>.from(data['localImagePaths'] ?? []), // Read from map
+      isSynced: data['isSynced'] as bool? ?? true,                     // Read from map
       userAnswers: Map<String, dynamic>.from(data['userAnswers'] ?? {}),
       aiConfirmedFloraFauna: (data['aiConfirmedFloraFauna'] as List<dynamic>?)
           ?.map((e) => ConfirmedIdentification.fromMap(e as Map<String, dynamic>))

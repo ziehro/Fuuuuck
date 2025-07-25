@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:fuuuuck/services/sync_service.dart';
 
 import 'package:fuuuuck/firebase_options.dart';
 import 'package:fuuuuck/services/auth_service.dart'; // Import AuthService
@@ -19,7 +21,10 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
+  SyncService();
   runApp(
     MultiProvider(
       providers: [

@@ -8,7 +8,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  connectivity_plus: ^6.1.4 # Use the latest version
   # Core BeachLens AI & Camera
   camera: 0.11.1
   tflite_flutter: ^0.11.0

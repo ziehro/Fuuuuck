@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For File
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp, GeoPoint
+import 'package:connectivity_plus/connectivity_plus.dart'; // For checking network status
+
 // For debugPrint
 
 // Corrected Imports for Location, Geocoding, Geohash, and Google Maps LatLng
@@ -78,7 +80,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
   final TextEditingController _provinceController = TextEditingController();
   final TextEditingController _municipalityController = TextEditingController();
 
-  List<File> _mainBeachImageFiles = []; // For multiple images of the beach // For the primary image of the beach
+  List<String> _localImagePaths = []; // Store local paths of picked images
   List<ConfirmedIdentification> _scannerConfirmedIdentifications = []; // AI scanner results
 
 
@@ -221,9 +223,11 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       debugPrint('Error getting location: $e');
       _showSnackBar('Failed to get current location: ${e.toString()}');
     } finally {
-      setState(() {
-        _gettingLocation = false;
-      });
+      if(mounted) {
+        setState(() {
+          _gettingLocation = false;
+        });
+      }
     }
   }
 
@@ -272,7 +276,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
     if (pickedFile != null) {
       setState(() {
-        _mainBeachImageFiles = [File(pickedFile.path)];
+        _localImagePaths = [pickedFile.path];
       });
     }
   }
@@ -364,7 +368,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       _showSnackBar('You must be logged in to add a beach.');
       return;
     }
-    if (_mainBeachImageFiles.isEmpty) {
+    if (_localImagePaths.isEmpty) {
       _showSnackBar('Please select at least one beach photo.');
       return;
     }
@@ -373,6 +377,15 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       await _getCurrentLocationAndGeocode(); // Try getting location again
       return;
     }
+
+    // Check connectivity status
+    final connectivityResult = await Connectivity().checkConnectivity();
+    final isOnline = connectivityResult.contains(ConnectivityResult.mobile) ||
+        connectivityResult.contains(ConnectivityResult.wifi);
+
+
+    _showSnackBar(isOnline ? 'Saving beach data...' : 'Saving offline. Will sync when back online.');
+
 
     // Check for latitude/longitude swap from the raw data
     final double lat = _currentLocation!.latitude;
@@ -384,20 +397,25 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       return;
     }
 
-    _showSnackBar('Saving beach data...');
 
     try {
-      // 1. Upload main beach image
       List<String> mainImageUrls = [];
-      for (var imageFile in _mainBeachImageFiles) {
-        final String? imageUrl = await beachDataService.uploadImage(imageFile);
-        if (imageUrl != null) {
-          mainImageUrls.add(imageUrl);
+      List<String> pendingImagePaths = List.from(_localImagePaths);
+
+      // 1. If online, upload images immediately
+      if (isOnline) {
+        for (var imagePath in _localImagePaths) {
+          final String? imageUrl = await beachDataService.uploadImage(File(imagePath));
+          if (imageUrl != null) {
+            mainImageUrls.add(imageUrl);
+          }
         }
-      }
-      if (mainImageUrls.isEmpty) {
-        _showSnackBar('Failed to upload any beach images.');
-        return;
+        if (mainImageUrls.isEmpty && _localImagePaths.isNotEmpty) {
+          _showSnackBar('Failed to upload beach images.');
+          return;
+        }
+        // If upload was successful, clear the pending paths
+        pendingImagePaths.clear();
       }
 
 
@@ -422,6 +440,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         latitude: lat,
         longitude: lon,
         contributedImageUrls: mainImageUrls,
+        localImagePaths: pendingImagePaths,  // This will have paths if offline
+        isSynced: isOnline,                 // Set sync status based on connectivity
         userAnswers: processedUserAnswers,
         aiConfirmedFloraFauna: _scannerConfirmedIdentifications,
         aiConfirmedRockTypes: [], // Will be populated when rock AI is ready
@@ -458,7 +478,6 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           aggregatedSingleChoices: _getAggregatedSingleChoicesFromContribution(contribution),
           aggregatedMultiChoices: _getAggregatedMultiChoicesFromContribution(contribution),
           aggregatedTextItems: _getAggregatedTextItemsFromContribution(contribution),
-          // ** FIX: Use the new data structure **
           identifiedFloraFauna: _getAggregatedFloraFauna(contribution),
           identifiedRockTypesComposition: {},
           identifiedBeachComposition: {},
@@ -479,7 +498,9 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         }
       }
 
-      Navigator.pop(context); // Go back after saving
+      if(mounted) {
+        Navigator.pop(context); // Go back after saving
+      }
 
     } catch (e) {
       debugPrint('Error during save new beach: $e');
@@ -542,7 +563,6 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     return textItems;
   }
 
-  // ** NEW: Updated helper to return the new data structure **
   Map<String, Map<String, dynamic>> _getAggregatedFloraFauna(Contribution contribution) {
     Map<String, Map<String, dynamic>> floraFauna = {};
     for (var confirmed in contribution.aiConfirmedFloraFauna) {
@@ -555,8 +575,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     return floraFauna;
   }
 
-  // ** NEW: Function to show the confirmation dialog **
-  Future<bool> _onWillPop() async {
+  // This is the function that will be called when a pop is attempted.
+  Future<bool> _showExitConfirmationDialog() async {
     return (await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -585,9 +605,19 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       "Details", "Flora", "Fauna", "Composition", "Man-Made"
     ];
 
-
-    return WillPopScope(
-      onWillPop: _onWillPop,
+    // ** FIX: Replaced WillPopScope with PopScope **
+    return PopScope(
+      canPop: false, // This prevents the screen from being popped automatically.
+      onPopInvoked: (bool didPop) async {
+        // This callback is invoked when a pop is attempted.
+        if (didPop) {
+          return; // If it was already popped, do nothing.
+        }
+        final bool shouldPop = await _showExitConfirmationDialog();
+        if (shouldPop && mounted) {
+          Navigator.of(context).pop();
+        }
+      },
       child: Scaffold(
         appBar: AppBar(
           title: Text(isNewBeach ? 'Add New Beach' : 'Add Contribution'),
@@ -617,10 +647,11 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
                   },
                 ),
               ),
-              // ** NEW: Page Selector **
+              // Page Selector
               Container(
                 padding: const EdgeInsets.all(8.0),
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                // ** FIX: Replaced withOpacity with withAlpha **
+                color: Theme.of(context).primaryColor.withAlpha((255 * 0.1).round()),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -717,9 +748,9 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
         ListTile(
           title: const Text('Main Beach Photo'),
-          trailing: _mainBeachImageFiles.isEmpty
+          trailing: _localImagePaths.isEmpty
               ? const Icon(Icons.add_a_photo)
-              : Image.file(_mainBeachImageFiles.first, width: 50, height: 50, fit: BoxFit.cover),
+              : Image.file(File(_localImagePaths.first), width: 50, height: 50, fit: BoxFit.cover),
           onTap: _showImagePickerOptions,
         ),
         const SizedBox(height: 16),
@@ -852,12 +883,6 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
   // --- Helper for Single Choice Dropdown ---
   Widget _buildSingleChoiceDropdown(String label, List<String> options) {
-    // OLD CODE: This line forced a default value if one wasn't present.
-    // if (!_formData.containsKey(label) || !_formData[label].toString().isNotEmpty) {
-    //   _formData[label] = options.first; // Default to the first option
-    // }
-
-    // NEW CODE: This ensures a null value is possible initially
     if (!_formData.containsKey(label)) {
       _formData[label] = null;
     }
@@ -910,7 +935,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
                   _formData[label] = selectedOptions; // Update formData
                 });
               },
-              selectedColor: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
+              // ** FIX: Replaced withOpacity with withAlpha **
+              selectedColor: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.3).round()),
               checkmarkColor: Theme.of(context).colorScheme.secondary,
             );
           }).toList(),
