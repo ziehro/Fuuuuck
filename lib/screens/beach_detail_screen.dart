@@ -16,9 +16,11 @@ class BeachDetailScreen extends StatelessWidget {
   static const List<String> floraMetricKeys = [
     'Kelp Beach', 'Seaweed Beach', 'Seaweed Rocks'
   ];
+  // Reordered from biggest to smallest
   static const List<String> woodMetricKeys = [
-    'Firewood', 'Kindling', 'Logs', 'Trees'
+    'Kindling', 'Firewood', 'Logs', 'Trees'
   ];
+  // Alphabetized
   static const List<String> faunaMetricKeys = [
     'Anemones', 'Barnacles', 'Bugs', 'Clams', 'Limpets', 'Mussels', 'Oysters', 'Snails', 'Turtles'
   ];
@@ -154,15 +156,6 @@ class BeachDetailScreen extends StatelessWidget {
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: Card(
-                      margin: const EdgeInsets.all(16.0),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Text(beach.description, style: Theme.of(context).textTheme.bodyLarge),
-                      ),
-                    ),
-                  ),
-                  SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                       child: Row(
@@ -219,13 +212,39 @@ class BeachDetailScreen extends StatelessWidget {
 
   Map<String, Widget> _buildDataTabs(BuildContext context, Beach beach) {
     return {
+      'Basic': _buildBasicTab(context, beach),
       'Flora': _buildFloraTab(context, beach),
       'Fauna': _buildFaunaTab(context, beach),
-      'Wood': _buildWoodTab(context, beach),
+      'Driftwood': _buildWoodTab(context, beach),
       'Composition': _buildCompositionTab(context, beach),
       'Other': _buildOtherTab(context, beach),
       'Identifications': _buildIdTab(context, beach),
     };
+  }
+
+  Widget _buildBasicTab(BuildContext context, Beach beach) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildCategoryTitle(context, 'AI Generated Description'),
+          Text(beach.aiDescription.isNotEmpty ? beach.aiDescription : 'No AI description available yet.'),
+          const SizedBox(height: 24),
+          _buildCategoryTitle(context, 'User Contributed Descriptions'),
+          if (beach.contributedDescriptions.isEmpty)
+            const Text('No user descriptions contributed yet.')
+          else
+            ...beach.contributedDescriptions.map((desc) => Card(
+              margin: const EdgeInsets.symmetric(vertical: 4),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Text('"$desc"'),
+              ),
+            )),
+        ],
+      ),
+    );
   }
 
   Widget _buildFloraTab(BuildContext context, Beach beach) {
@@ -259,6 +278,14 @@ class BeachDetailScreen extends StatelessWidget {
           _buildMetricsCategoryTab(context, beach, faunaMetricKeys),
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'Answers'),
+          if (beach.aggregatedTextItems.containsKey('Birds'))
+            _buildDataRow(
+              'Birds',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: (beach.aggregatedTextItems['Birds'] as List<dynamic>).map((e) => Text(e.toString(), textAlign: TextAlign.end)).toList(),
+              ),
+            ),
           if (beach.aggregatedMultiChoices.containsKey('Which Shells'))
             _buildDataRow(
               'Which Shells',

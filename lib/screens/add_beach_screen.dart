@@ -5,8 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io'; // For File
 import 'package:cloud_firestore/cloud_firestore.dart'; // For Timestamp, GeoPoint
 import 'package:connectivity_plus/connectivity_plus.dart'; // For checking network status
-
-// For debugPrint
+import 'package:fuuuuck/services/gemini_service.dart';
 
 // Corrected Imports for Location, Geocoding, Geohash, and Google Maps LatLng
 import 'package:geolocator/geolocator.dart'; // For getting current GPS location
@@ -67,7 +66,7 @@ class AddBeachScreen extends StatefulWidget {
   State<AddBeachScreen> createState() => _AddBeachScreenState();
 }
 
-class _AddBeachScreenState extends State<AddBeachScreen> {
+class _AddBeachScreenState extends State<AddBeachScreen> with AutomaticKeepAliveClientMixin<AddBeachScreen> {
   final _formKey = GlobalKey<FormState>(); // Key for form validation
   final _pageController = PageController(); // Add PageController
   final FocusNode _descriptionFocusNode = FocusNode();
@@ -90,9 +89,15 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
   // For location (will automatically get from GPS or use initialLocation)
   LatLng? _currentLocation;
   bool _gettingLocation = false;
+  bool _isSaving = false;
 
   int _currentPageIndex = 0;
   String _appBarTitle = "Add New Beach";
+
+  final GeminiService _geminiService = GeminiService();
+
+  @override
+  bool get wantKeepAlive => true;
 
 
   // --- All your questions from the Java app, structured for Flutter ---
@@ -345,6 +350,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
 
   Future<void> _saveNewBeach() async {
+    if (_isSaving) return;
+
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -367,13 +374,18 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       return;
     }
 
+    setState(() {
+      _isSaving = true;
+    });
+
     FocusScope.of(context).unfocus();
     if (!_formKey.currentState!.validate()) {
       _showSnackBar('Please fill in all required fields.');
+      setState(() { _isSaving = false; });
       return;
     }
 
-    _formKey.currentState!.save(); // Save all form fields
+    _formKey.currentState!.save();
 
     final beachDataService = Provider.of<BeachDataService>(context, listen: false);
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -381,19 +393,21 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
     if (user == null) {
       _showSnackBar('You must be logged in to add a beach.');
+      setState(() { _isSaving = false; });
       return;
     }
     if (_localImagePaths.isEmpty) {
       _showSnackBar('Please select at least one beach photo.');
+      setState(() { _isSaving = false; });
       return;
     }
     if (_currentLocation == null) {
       _showSnackBar('Getting location. Please try again in a moment or grant permission.');
-      await _getCurrentLocationAndGeocode(); // Try getting location again
+      await _getCurrentLocationAndGeocode();
+      setState(() { _isSaving = false; });
       return;
     }
 
-    // Check connectivity status
     final connectivityResult = await Connectivity().checkConnectivity();
     final isOnline = connectivityResult.contains(ConnectivityResult.mobile) ||
         connectivityResult.contains(ConnectivityResult.wifi);
@@ -402,12 +416,12 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     _showSnackBar(isOnline ? 'Saving beach data...' : 'Saving offline. Will sync when back online.');
 
 
-    // Check for latitude/longitude swap from the raw data
     final double lat = _currentLocation!.latitude;
     final double lon = _currentLocation!.longitude;
 
     if (lat < -90 || lat > 90) {
       _showSnackBar('Location data is invalid. Latitude is out of range. Please try again.');
+      setState(() { _isSaving = false; });
       debugPrint('Location Data Error: Final lat=$lat, lon=$lon');
       return;
     }
@@ -417,7 +431,6 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       List<String> mainImageUrls = [];
       List<String> pendingImagePaths = List.from(_localImagePaths);
 
-      // 1. If online, upload images immediately
       if (isOnline) {
         for (var imagePath in _localImagePaths) {
           final String? imageUrl = await beachDataService.uploadImage(File(imagePath));
@@ -427,44 +440,29 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         }
         if (mainImageUrls.isEmpty && _localImagePaths.isNotEmpty) {
           _showSnackBar('Failed to upload beach images.');
+          setState(() { _isSaving = false; });
           return;
         }
-        // If upload was successful, clear the pending paths
         pendingImagePaths.clear();
       }
 
+      _formData['Short Description'] = _shortDescriptionController.text;
 
-      // Convert dynamic text inputs (like "Birds") into List<String>
-      Map<String, dynamic> processedUserAnswers = Map.from(_formData);
-      for (var field in _formFields) {
-        if (field.type == InputFieldType.text && processedUserAnswers.containsKey(field.label)) {
-          String rawValue = processedUserAnswers[field.label] as String? ?? '';
-          processedUserAnswers[field.label] = rawValue.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-        }
-      }
-
-      // Also save the short description
-      processedUserAnswers['Short Description'] = _shortDescriptionController.text;
-
-
-      // 2. Create the initial Contribution object
       final contribution = Contribution(
         userId: user.uid,
-        userEmail: user.email ?? '', // <-- ADD THIS LINE
+        userEmail: user.email ?? '',
         timestamp: Timestamp.now(),
         latitude: lat,
         longitude: lon,
         contributedImageUrls: mainImageUrls,
-        localImagePaths: pendingImagePaths,  // This will have paths if offline
-        isSynced: isOnline,                 // Set sync status based on connectivity
-        userAnswers: processedUserAnswers,
+        localImagePaths: pendingImagePaths,
+        isSynced: isOnline,
+        userAnswers: _formData,
         aiConfirmedFloraFauna: _scannerConfirmedIdentifications,
-        aiConfirmedRockTypes: [], // Will be populated when rock AI is ready
+        aiConfirmedRockTypes: [],
       );
 
-      // New Logic: Check if we are adding to an existing beach or creating a new one
       if (widget.beachId != null) {
-        // We are adding a contribution to an existing beach
         await beachDataService.addContribution(
           beachId: widget.beachId!,
           contribution: contribution,
@@ -473,10 +471,15 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
         );
         _showSnackBar('Contribution added successfully!');
       } else {
-        // We are creating a brand new beach
+        _showSnackBar('Generating AI description...');
+        final String aiDescription = await _geminiService.generateBeachDescription(
+          beachName: _beachNameController.text,
+          userAnswers: _formData,
+        );
+
         final geoHasher = GeoHasher();
         final initialBeach = Beach(
-          id: '', // ID will be generated by Firestore
+          id: '',
           name: _beachNameController.text,
           latitude: lat,
           longitude: lon,
@@ -485,17 +488,16 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           province: _provinceController.text,
           municipality: _municipalityController.text,
           description: _shortDescriptionController.text,
+          aiDescription: aiDescription,
           imageUrls: mainImageUrls,
           timestamp: Timestamp.now(),
           lastAggregated: Timestamp.now(),
-          // *** FIX: Initialize counts and maps as empty/zero ***
           totalContributions: 0,
           aggregatedMetrics: {},
           aggregatedSingleChoices: {},
           aggregatedMultiChoices: {},
           aggregatedTextItems: {},
           identifiedFloraFauna: {},
-          // ******************************************************
           identifiedRockTypesComposition: {},
           identifiedBeachComposition: {},
           discoveryQuestions: [],
@@ -516,24 +518,21 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       }
 
       if(mounted) {
-        Navigator.pop(context); // Go back after saving
+        Navigator.pop(context);
       }
 
     } catch (e) {
       debugPrint('Error during save new beach: $e');
       _showSnackBar('An error occurred: ${e.toString()}');
+    } finally {
+      if(mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
   }
 
-  // ** These helper methods are no longer needed here as the cloud function handles all aggregation **
-  // You can safely delete them.
-  // _getAggregatedMetricsFromContribution
-  // _getAggregatedSingleChoicesFromContribution
-  // _getAggregatedMultiChoicesFromContribution
-  // _getAggregatedTextItemsFromContribution
-  // _getAggregatedFloraFauna
-
-  // This is the function that will be called when a pop is attempted.
   Future<bool> _showExitConfirmationDialog() async {
     return (await showDialog<bool>(
       context: context,
@@ -554,9 +553,67 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     )) ?? false;
   }
 
+  void _showInfoDialog(String subject) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return FutureBuilder<GeminiInfo>(
+          future: _geminiService.getInfoAndImage(subject),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading info...'),
+                  ],
+                ),
+              );
+            }
+
+            if (snapshot.hasError || !snapshot.hasData) {
+              return AlertDialog(
+                title: const Text('Error'),
+                content: const Text('Could not load information.'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+                ],
+              );
+            }
+
+            final info = snapshot.data!;
+            return AlertDialog(
+              title: Text(subject),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 150,
+                      width: double.infinity,
+                      child: info.image,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(info.description),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Needed for AutomaticKeepAliveClientMixin
     final List<Widget> pages = _buildPages(widget.beachId == null);
     final List<String> pageTitles = [
       "Details", "Flora", "Fauna", "Wood", "Composition", "Other"
@@ -573,13 +630,11 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     }
 
 
-    // ** FIX: Replaced WillPopScope with PopScope **
     return PopScope(
-      canPop: false, // This prevents the screen from being popped automatically.
+      canPop: false,
       onPopInvoked: (bool didPop) async {
-        // This callback is invoked when a pop is attempted.
         if (didPop) {
-          return; // If it was already popped, do nothing.
+          return;
         }
         final bool shouldPop = await _showExitConfirmationDialog();
         if (shouldPop && mounted) {
@@ -592,10 +647,16 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
           backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
           foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
           actions: [
-            IconButton(
-              icon: const Icon(Icons.save),
-              onPressed: _saveNewBeach,
-            ),
+            if (_isSaving)
+              const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white)),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.save),
+                onPressed: _saveNewBeach,
+              ),
           ],
         ),
         body: _gettingLocation
@@ -615,10 +676,8 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
                   },
                 ),
               ),
-              // Page Selector
               Container(
                 padding: const EdgeInsets.all(8.0),
-                // ** FIX: Replaced withOpacity with withAlpha **
                 color: Theme.of(context).primaryColor.withAlpha((255 * 0.1).round()),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -658,104 +717,106 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
   List<Widget> _buildPages(bool isNewBeach) {
     // Page 1: Core Details
-    final page1 = ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: [
-        TextFormField(
-          controller: _beachNameController,
-          focusNode: _beachNameFocusNode,
-          decoration: const InputDecoration(labelText: 'Beach Name', hintText: 'Enter Here'),
-          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter a beach name' : null : null,
-          onSaved: (value) => _formData['Beach Name'] = value,
-          readOnly: !isNewBeach, // Make read-only for contributions
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _shortDescriptionController,
-          focusNode: _descriptionFocusNode,
-          decoration: const InputDecoration(
-            labelText: 'Short Description',
-            border: OutlineInputBorder(),
-            filled: true,  // Better visual feedback
-            fillColor: Colors.white,
+    final page1 = KeepAlivePage(
+      child: ListView(
+        padding: const EdgeInsets.all(16.0),
+        children: [
+          TextFormField(
+            controller: _beachNameController,
+            focusNode: _beachNameFocusNode,
+            decoration: const InputDecoration(labelText: 'Beach Name', hintText: 'Enter Here'),
+            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter a beach name' : null : null,
+            onSaved: (value) => _formData['Beach Name'] = value,
+            readOnly: !isNewBeach,
           ),
-          maxLines: 3,
-          minLines: 1,
-          keyboardType: TextInputType.multiline,
-          textInputAction: TextInputAction.newline,
-          enableInteractiveSelection: true,
-          onSaved: (value) => _formData['Short Description'] = value,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _countryController,
-          decoration: const InputDecoration(labelText: 'Country', hintText: 'Enter Here'),
-          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter country' : null : null,
-          onSaved: (value) => _formData['Country'] = value,
-          readOnly: !isNewBeach,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _provinceController,
-          decoration: const InputDecoration(labelText: 'Province', hintText: 'Enter Here'),
-          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter province' : null : null,
-          onSaved: (value) => _formData['Province'] = value,
-          readOnly: !isNewBeach,
-        ),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _municipalityController,
-          decoration: const InputDecoration(labelText: 'Municipality', hintText: 'Enter Here'),
-          validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter municipality' : null : null,
-          onSaved: (value) => _formData['Municipality'] = value,
-          readOnly: !isNewBeach,
-        ),
-        const SizedBox(height: 16),
-        Text('Location: ${_currentLocation?.latitude.toStringAsFixed(4)}, ${_currentLocation?.longitude.toStringAsFixed(4)}',
-            style: Theme.of(context).textTheme.bodyLarge),
-        const SizedBox(height: 16),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _shortDescriptionController,
+            focusNode: _descriptionFocusNode,
+            decoration: const InputDecoration(
+              labelText: 'Short Description',
+              border: OutlineInputBorder(),
+              filled: true,
+              fillColor: Colors.white,
+            ),
+            maxLines: 3,
+            minLines: 1,
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            enableInteractiveSelection: true,
+            onSaved: (value) => _formData['Short Description'] = value,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _countryController,
+            decoration: const InputDecoration(labelText: 'Country', hintText: 'Enter Here'),
+            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter country' : null : null,
+            onSaved: (value) => _formData['Country'] = value,
+            readOnly: !isNewBeach,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _provinceController,
+            decoration: const InputDecoration(labelText: 'Province', hintText: 'Enter Here'),
+            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter province' : null : null,
+            onSaved: (value) => _formData['Province'] = value,
+            readOnly: !isNewBeach,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _municipalityController,
+            decoration: const InputDecoration(labelText: 'Municipality', hintText: 'Enter Here'),
+            validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter municipality' : null : null,
+            onSaved: (value) => _formData['Municipality'] = value,
+            readOnly: !isNewBeach,
+          ),
+          const SizedBox(height: 16),
+          Text('Location: ${_currentLocation?.latitude.toStringAsFixed(4)}, ${_currentLocation?.longitude.toStringAsFixed(4)}',
+              style: Theme.of(context).textTheme.bodyLarge),
+          const SizedBox(height: 16),
 
-        ListTile(
-          title: const Text('Main Beach Photo'),
-          trailing: _localImagePaths.isEmpty
-              ? const Icon(Icons.add_a_photo)
-              : Image.file(File(_localImagePaths.first), width: 50, height: 50, fit: BoxFit.cover),
-          onTap: _showImagePickerOptions,
-        ),
-        const SizedBox(height: 16),
-        ElevatedButton.icon(
-          onPressed: _scanForIdentifications,
-          icon: const Icon(Icons.camera_alt),
-          label: Text('Scan Flora/Fauna (${_scannerConfirmedIdentifications.length} confirmed)'),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Theme.of(context).primaryColor,
-            foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+          ListTile(
+            title: const Text('Main Beach Photo'),
+            trailing: _localImagePaths.isEmpty
+                ? const Icon(Icons.add_a_photo)
+                : Image.file(File(_localImagePaths.first), width: 50, height: 50, fit: BoxFit.cover),
+            onTap: _showImagePickerOptions,
           ),
-        ),
-        const SizedBox(height: 16),
-        if (_scannerConfirmedIdentifications.isNotEmpty)
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Confirmed Scans:', style: Theme.of(context).textTheme.titleSmall),
-              Wrap(
-                spacing: 8.0,
-                runSpacing: 4.0,
-                children: _scannerConfirmedIdentifications.map((id) {
-                  final confirmedId = id;
-                  return Chip(
-                    label: Text(confirmedId.commonName),
-                    onDeleted: () {
-                      setState(() {
-                        _scannerConfirmedIdentifications.remove(id);
-                      });
-                    },
-                  );
-                }).toList(),
-              ),
-            ],
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: _scanForIdentifications,
+            icon: const Icon(Icons.camera_alt),
+            label: Text('Scan Flora/Fauna (${_scannerConfirmedIdentifications.length} confirmed)'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).primaryColor,
+              foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+            ),
           ),
-      ],
+          const SizedBox(height: 16),
+          if (_scannerConfirmedIdentifications.isNotEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Confirmed Scans:', style: Theme.of(context).textTheme.titleSmall),
+                Wrap(
+                  spacing: 8.0,
+                  runSpacing: 4.0,
+                  children: _scannerConfirmedIdentifications.map((id) {
+                    final confirmedId = id;
+                    return Chip(
+                      label: Text(confirmedId.commonName),
+                      onDeleted: () {
+                        setState(() {
+                          _scannerConfirmedIdentifications.remove(id);
+                        });
+                      },
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+        ],
+      ),
     );
 
     // Group fields for other pages
@@ -778,81 +839,98 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
 
   Widget _buildFormPage(List<FormFieldData> fields) {
-    return ListView(
-      padding: const EdgeInsets.all(16.0),
-      children: fields.map((field) {
-        switch (field.type) {
-          case InputFieldType.text:
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: TextFormField(
-                decoration: InputDecoration(labelText: field.label, hintText: 'Enter Here'),
-                initialValue: field.initialValue,
-                onSaved: (value) => _formData[field.label] = value,
-              ),
-            );
-          case InputFieldType.number:
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: TextFormField(
-                decoration: InputDecoration(labelText: field.label, hintText: 'Enter Here'),
-                keyboardType: TextInputType.number,
-                initialValue: field.initialValue?.toString(),
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Please enter a number';
-                  if (int.tryParse(value) == null) return 'Please enter a valid number';
-                  return null;
-                },
-                onSaved: (value) => _formData[field.label] = int.tryParse(value ?? '0'),
-              ),
-            );
-          case InputFieldType.slider:
-            if (!_formData.containsKey(field.label)) {
-              _formData[field.label] = field.minValue ?? 0;
-            }
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('${field.label}: ${(_formData[field.label] ?? field.minValue ?? 0).round()}', style: Theme.of(context).textTheme.bodyLarge),
-                  Slider(
-                    value: (_formData[field.label] ?? field.minValue ?? 0).toDouble(),
-                    min: (field.minValue ?? 0).toDouble(),
-                    max: (field.maxValue ?? 5).toDouble(),
-                    divisions: (field.maxValue ?? 5) - (field.minValue ?? 0),
-                    label: (_formData[field.label] ?? field.minValue ?? 0).round().toString(),
-                    onChanged: (double value) {
-                      setState(() {
-                        _formData[field.label] = value.round();
-                      });
-                    },
-                    onChangeEnd: (double value) {
-                      _formData[field.label] = value.round();
-                    },
-                  ),
-                ],
-              ),
-            );
-          case InputFieldType.singleChoice:
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: _buildSingleChoiceDropdown(field.label, field.options!),
-            );
-          case InputFieldType.multiChoice:
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8.0),
-              child: _buildMultiChoiceChips(field.label, field.options!),
-            );
-          case InputFieldType.imagePicker:
-          case InputFieldType.scannerConfirmation:
-            return const SizedBox.shrink();
-        }
-      }).toList(),
+    return KeepAlivePage(
+      child: ListView(
+        padding: const EdgeInsets.all(16.0),
+        children: fields.map((field) {
+          return GestureDetector(
+            onLongPress: () => _showInfoDialog(field.label),
+            child: AbsorbPointer(
+              absorbing: false,
+              child: _buildFormFieldWidget(field),
+            ),
+          );
+        }).toList(),
+      ),
     );
   }
 
-  // --- Helper for Single Choice Dropdown ---
+  Widget _buildFormFieldWidget(FormFieldData field) {
+    switch (field.type) {
+      case InputFieldType.text:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: TextFormField(
+            decoration: InputDecoration(labelText: field.label, hintText: 'Enter Here, separated by commas'),
+            initialValue: field.initialValue,
+            onSaved: (value) {
+              if (value != null && value.isNotEmpty) {
+                _formData[field.label] = value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+              } else {
+                _formData[field.label] = [];
+              }
+            },
+          ),
+        );
+      case InputFieldType.number:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: TextFormField(
+            decoration: InputDecoration(labelText: field.label, hintText: 'Enter Here'),
+            keyboardType: TextInputType.number,
+            initialValue: field.initialValue?.toString(),
+            validator: (value) {
+              if (value == null || value.isEmpty) return 'Please enter a number';
+              if (double.tryParse(value) == null) return 'Please enter a valid number';
+              return null;
+            },
+            onSaved: (value) => _formData[field.label] = double.tryParse(value ?? '0.0'),
+          ),
+        );
+      case InputFieldType.slider:
+        if (!_formData.containsKey(field.label)) {
+          _formData[field.label] = field.minValue ?? 0;
+        }
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${field.label}: ${(_formData[field.label] ?? field.minValue ?? 0).round()}', style: Theme.of(context).textTheme.bodyLarge),
+              Slider(
+                value: (_formData[field.label] ?? field.minValue ?? 0).toDouble(),
+                min: (field.minValue ?? 0).toDouble(),
+                max: (field.maxValue ?? 5).toDouble(),
+                divisions: (field.maxValue ?? 5) - (field.minValue ?? 0),
+                label: (_formData[field.label] ?? field.minValue ?? 0).round().toString(),
+                onChanged: (double value) {
+                  setState(() {
+                    _formData[field.label] = value.round();
+                  });
+                },
+                onChangeEnd: (double value) {
+                  _formData[field.label] = value.round();
+                },
+              ),
+            ],
+          ),
+        );
+      case InputFieldType.singleChoice:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: _buildSingleChoiceDropdown(field.label, field.options!),
+        );
+      case InputFieldType.multiChoice:
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          child: _buildMultiChoiceChips(field.label, field.options!),
+        );
+      case InputFieldType.imagePicker:
+      case InputFieldType.scannerConfirmation:
+        return const SizedBox.shrink();
+    }
+  }
+
   Widget _buildSingleChoiceDropdown(String label, List<String> options) {
     if (!_formData.containsKey(label)) {
       _formData[label] = null;
@@ -876,43 +954,68 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     );
   }
 
-  // --- Helper for Multi-Choice Chips ---
   Widget _buildMultiChoiceChips(String label, List<String> options) {
     if (!_formData.containsKey(label)) {
-      _formData[label] = <String>[]; // Initialize as empty list if not present
+      _formData[label] = <String>[];
     }
     List<String> selectedOptions = List<String>.from(_formData[label] ?? []);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyLarge),
+        GestureDetector(
+          onLongPress: () => _showInfoDialog(label),
+          child: Text(label, style: Theme.of(context).textTheme.bodyLarge),
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 8.0,
           runSpacing: 4.0,
           children: options.map((option) {
             final bool isSelected = selectedOptions.contains(option);
-            return FilterChip(
-              label: Text(option),
-              selected: isSelected,
-              onSelected: (bool selected) {
-                setState(() {
-                  if (selected) {
-                    selectedOptions.add(option);
-                  } else {
-                    selectedOptions.remove(option);
-                  }
-                  _formData[label] = selectedOptions; // Update formData
-                });
-              },
-              // ** FIX: Replaced withOpacity with withAlpha **
-              selectedColor: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.3).round()),
-              checkmarkColor: Theme.of(context).colorScheme.secondary,
+            return GestureDetector(
+              onLongPress: () => _showInfoDialog(option),
+              child: FilterChip(
+                label: Text(option),
+                selected: isSelected,
+                onSelected: (bool selected) {
+                  setState(() {
+                    if (selected) {
+                      selectedOptions.add(option);
+                    } else {
+                      selectedOptions.remove(option);
+                    }
+                    _formData[label] = selectedOptions;
+                  });
+                },
+                selectedColor: Theme.of(context).colorScheme.secondary.withAlpha((255 * 0.3).round()),
+                checkmarkColor: Theme.of(context).colorScheme.secondary,
+              ),
             );
           }).toList(),
         ),
       ],
     );
   }
+}
+
+// A helper widget to keep the state of each page in the PageView alive.
+class KeepAlivePage extends StatefulWidget {
+  final Widget child;
+
+  const KeepAlivePage({super.key, required this.child});
+
+  @override
+  State<KeepAlivePage> createState() => _KeepAlivePageState();
+}
+
+class _KeepAlivePageState extends State<KeepAlivePage> with AutomaticKeepAliveClientMixin {
+  @override
+  Widget build(BuildContext context) {
+    super.build(context); // This is important!
+    return widget.child;
+  }
+
+  @override
+  bool get wantKeepAlive => true;
 }

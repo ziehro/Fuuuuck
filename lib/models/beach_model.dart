@@ -2,7 +2,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Beach {
-  final String id; // Firestore Document ID
+  final String id;
   final String name;
   final double latitude;
   final double longitude;
@@ -11,22 +11,21 @@ class Beach {
   final String province;
   final String municipality;
   final String description;
-  final List<String> imageUrls; // Main images for the beach
-  final Timestamp timestamp; // Creation timestamp
-  final Timestamp lastAggregated; // When aggregation was last run
+  final String aiDescription;
+  final List<String> imageUrls;
+  final List<String> contributedDescriptions;
+  final Timestamp timestamp;
+  final Timestamp lastAggregated;
   final int totalContributions;
   final Map<String, double> aggregatedMetrics;
-  final Map<String, Map<String, dynamic>> aggregatedSingleChoices;
-  final Map<String, Map<String, dynamic>> aggregatedMultiChoices;
-  final Map<String, List<String>> aggregatedTextItems;
-  // This is the correct field name
-  final Map<String, Map<String, dynamic>> identifiedFloraFauna;
-  final Map<String, double> identifiedRockTypesComposition;
-  final Map<String, double> identifiedBeachComposition;
-  final String? aiGeneratedImageUrl;
+  final Map<String, dynamic> aggregatedSingleChoices;
+  final Map<String, dynamic> aggregatedMultiChoices;
+  final Map<String, List<dynamic>> aggregatedTextItems;
+  final Map<String, dynamic> identifiedFloraFauna;
+  final Map<String, dynamic> identifiedRockTypesComposition;
+  final Map<String, dynamic> identifiedBeachComposition;
   final List<String> discoveryQuestions;
   final String educationalInfo;
-  final List<String> contributedDescriptions;
 
   Beach({
     required this.id,
@@ -38,55 +37,22 @@ class Beach {
     required this.province,
     required this.municipality,
     required this.description,
-    this.imageUrls = const [],
+    required this.aiDescription, // <-- CORRECTED: Added to constructor
+    required this.imageUrls,
+    required this.contributedDescriptions,
     required this.timestamp,
     required this.lastAggregated,
     required this.totalContributions,
-    this.aggregatedMetrics = const {},
-    this.aggregatedSingleChoices = const {},
-    this.aggregatedMultiChoices = const {},
-    this.aggregatedTextItems = const {},
-    // This is the correct parameter name in the constructor
-    this.identifiedFloraFauna = const {},
-    this.identifiedRockTypesComposition = const {},
-    this.identifiedBeachComposition = const {},
-    this.aiGeneratedImageUrl,
-    this.discoveryQuestions = const [],
-    this.educationalInfo = '',
-    required this.contributedDescriptions,
+    required this.aggregatedMetrics,
+    required this.aggregatedSingleChoices,
+    required this.aggregatedMultiChoices,
+    required this.aggregatedTextItems,
+    required this.identifiedFloraFauna,
+    required this.identifiedRockTypesComposition,
+    required this.identifiedBeachComposition,
+    required this.discoveryQuestions,
+    required this.educationalInfo,
   });
-
-  factory Beach.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
-    data ??= {};
-
-    return Beach(
-      id: doc.id,
-      name: data['name'] as String? ?? 'Unnamed Beach',
-      latitude: (data['latitude'] as num? ?? 0.0).toDouble(),
-      longitude: (data['longitude'] as num? ?? 0.0).toDouble(),
-      geohash: data['geohash'] as String? ?? 'unknown',
-      country: data['country'] as String? ?? '',
-      province: data['province'] as String? ?? '',
-      municipality: data['municipality'] as String? ?? '',
-      description: data['description'] as String? ?? '',
-      imageUrls: List<String>.from(data['imageUrls'] ?? []),
-      timestamp: data['timestamp'] as Timestamp? ?? Timestamp.now(),
-      lastAggregated: data['lastAggregated'] as Timestamp? ?? Timestamp.now(),
-      totalContributions: data['totalContributions'] as int? ?? 0,
-      aggregatedMetrics: (data['aggregatedMetrics'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
-      aggregatedSingleChoices: Map<String, Map<String, dynamic>>.from(data['aggregatedSingleChoices'] ?? {}),
-      aggregatedMultiChoices: Map<String, Map<String, dynamic>>.from(data['aggregatedMultiChoices'] ?? {}),
-      aggregatedTextItems: (data['aggregatedTextItems'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, List<String>.from(v ?? []))) ?? {},
-      identifiedFloraFauna: Map<String, Map<String, dynamic>>.from(data['identifiedFloraFauna'] ?? {}),
-      identifiedRockTypesComposition: (data['identifiedRockTypesComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
-      identifiedBeachComposition: (data['identifiedBeachComposition'] as Map<String, dynamic>?)?.map((k, v) => MapEntry(k, (v as num).toDouble())) ?? {},
-      aiGeneratedImageUrl: data['aiGeneratedImageUrl'] as String?,
-      discoveryQuestions: List<String>.from(data['discoveryQuestions'] ?? []),
-      educationalInfo: data['educationalInfo'] as String? ?? '',
-      contributedDescriptions: List<String>.from(data['contributedDescriptions'] ?? []),
-    );
-  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -98,7 +64,9 @@ class Beach {
       'province': province,
       'municipality': municipality,
       'description': description,
+      'aiDescription': aiDescription,
       'imageUrls': imageUrls,
+      'contributedDescriptions': contributedDescriptions,
       'timestamp': timestamp,
       'lastAggregated': lastAggregated,
       'totalContributions': totalContributions,
@@ -109,10 +77,38 @@ class Beach {
       'identifiedFloraFauna': identifiedFloraFauna,
       'identifiedRockTypesComposition': identifiedRockTypesComposition,
       'identifiedBeachComposition': identifiedBeachComposition,
-      'aiGeneratedImageUrl': aiGeneratedImageUrl,
       'discoveryQuestions': discoveryQuestions,
       'educationalInfo': educationalInfo,
-      'contributedDescriptions': contributedDescriptions,
     };
+  }
+
+  factory Beach.fromFirestore(DocumentSnapshot doc) {
+    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    return Beach(
+      id: doc.id,
+      name: data['name'] ?? '',
+      latitude: (data['latitude'] ?? 0.0).toDouble(),
+      longitude: (data['longitude'] ?? 0.0).toDouble(),
+      geohash: data['geohash'] ?? '',
+      country: data['country'] ?? '',
+      province: data['province'] ?? '',
+      municipality: data['municipality'] ?? '',
+      description: data['description'] ?? '',
+      aiDescription: data['aiDescription'] ?? '',
+      imageUrls: List<String>.from(data['imageUrls'] ?? []),
+      contributedDescriptions: List<String>.from(data['contributedDescriptions'] ?? []),
+      timestamp: data['timestamp'] ?? Timestamp.now(),
+      lastAggregated: data['lastAggregated'] ?? Timestamp.now(),
+      totalContributions: data['totalContributions'] ?? 0,
+      // The new, corrected line:
+      aggregatedMetrics: Map<String, num>.from(data['aggregatedMetrics'] ?? {}).map((key, value) => MapEntry(key, value.toDouble())),aggregatedSingleChoices: Map<String, dynamic>.from(data['aggregatedSingleChoices'] ?? {}),
+      aggregatedMultiChoices: Map<String, dynamic>.from(data['aggregatedMultiChoices'] ?? {}),
+      aggregatedTextItems: Map<String, List<dynamic>>.from(data['aggregatedTextItems'] ?? {}),
+      identifiedFloraFauna: Map<String, dynamic>.from(data['identifiedFloraFauna'] ?? {}),
+      identifiedRockTypesComposition: Map<String, dynamic>.from(data['identifiedRockTypesComposition'] ?? {}),
+      identifiedBeachComposition: Map<String, dynamic>.from(data['identifiedBeachComposition'] ?? {}),
+      discoveryQuestions: List<String>.from(data['discoveryQuestions'] ?? []),
+      educationalInfo: data['educationalInfo'] ?? '',
+    );
   }
 }
