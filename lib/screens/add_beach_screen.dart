@@ -92,11 +92,57 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
   bool _gettingLocation = false;
 
   int _currentPageIndex = 0;
+  String _appBarTitle = "Add New Beach";
 
 
   // --- All your questions from the Java app, structured for Flutter ---
   final List<FormFieldData> _formFields = [
-    // Core beach details handled by controllers above, no need in this list
+    // Flora
+    FormFieldData(label: 'Seaweed Beach', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Seaweed Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Kelp Beach', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Trees', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Tree types', type: InputFieldType.text),
+
+    // Fauna
+    FormFieldData(label: 'Anemones', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Barnacles', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Bugs', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Snails', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Oysters', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Clams', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Limpets', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Turtles', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Mussels', type: InputFieldType.slider, minValue: 1, maxValue: 7),
+    FormFieldData(label: 'Birds', type: InputFieldType.text),
+    FormFieldData(label: 'Which Shells', type: InputFieldType.multiChoice, options: ['Butter Clam', 'Mussel', 'Crab', 'Oyster', 'Whelks', 'Turban', 'Sand dollars', 'Cockles', 'Starfish', 'Limpets']),
+
+    // Wood
+    FormFieldData(label: 'Kindling', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Firewood', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Logs', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+
+    // Composition
+    FormFieldData(label: 'Width', type: InputFieldType.number),
+    FormFieldData(label: 'Length', type: InputFieldType.number),
+    FormFieldData(label: 'Sand', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Pebbles', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Baseball Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Boulders', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Stone', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Coal', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Mud', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Midden', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Islands', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Bluff Height', type: InputFieldType.number),
+    FormFieldData(label: 'Bluffs Grade', type: InputFieldType.slider, minValue: 1, maxValue: 9),
+    FormFieldData(label: 'Shape', type: InputFieldType.singleChoice, options: ['Concave', 'Convex', 'Isthmus', 'Horseshoe', 'Straight']),
+    FormFieldData(label: 'Bluff Comp', type: InputFieldType.multiChoice, options: ['Sand', 'Rock', 'Thick Brush', 'Grass']),
+    FormFieldData(label: 'Rock Type', type: InputFieldType.singleChoice, options: ['Igneous', 'Sedimentary', 'Metamorphic']),
+
+
+    // Other
     FormFieldData(label: 'Boats on Shore', type: InputFieldType.slider, minValue: 0, maxValue: 1),
     FormFieldData(label: 'Caves', type: InputFieldType.slider, minValue: 0, maxValue: 1),
     FormFieldData(label: 'Patio Nearby?', type: InputFieldType.slider, minValue: 0, maxValue: 1),
@@ -105,63 +151,14 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     FormFieldData(label: 'Private', type: InputFieldType.slider, minValue: 0, maxValue: 1),
     FormFieldData(label: 'Stink', type: InputFieldType.slider, minValue: 0, maxValue: 1),
     FormFieldData(label: 'Windy', type: InputFieldType.slider, minValue: 0, maxValue: 2),
-
-    FormFieldData(label: 'Trees', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Logs', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Firewood', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Kindling', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-
-    FormFieldData(label: 'Baseball Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Boulders', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Sand', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Pebbles', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Islands', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Mud', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Midden', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Stone', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-    FormFieldData(label: 'Coal', type: InputFieldType.slider, minValue: 1, maxValue: 5),
-
-    FormFieldData(label: 'Anemones', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Barnacles', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Seaweed Beach', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Seaweed Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Kelp Beach', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Bugs', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Snails', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Oysters', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Clams', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Limpets', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Turtles', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Mussels', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-
-    FormFieldData(label: 'Bluffs Grade', type: InputFieldType.slider, minValue: 1, maxValue: 9),
     FormFieldData(label: 'Garbage', type: InputFieldType.slider, minValue: 1, maxValue: 9),
     FormFieldData(label: 'People', type: InputFieldType.slider, minValue: 0, maxValue: 5),
-
-
-    // Single Choice questions
     FormFieldData(label: 'Best Tide', type: InputFieldType.singleChoice, options: ['Low', 'Mid', 'High', "Don't Matter"]),
     FormFieldData(label: 'Parking', type: InputFieldType.singleChoice, options: ['Parked on the beach', '1 minute', '5 minutes', '10 minutes', '30 minutes', '1 hour plus', 'Boat access only']),
-    FormFieldData(label: 'Rock Type', type: InputFieldType.singleChoice, options: ['Igneous', 'Sedimentary', 'Metamorphic']),
-    FormFieldData(label: 'Shape', type: InputFieldType.singleChoice, options: ['Concave', 'Convex', 'Isthmus', 'Horseshoe', 'Straight']),
-
-    // Numerical Input questions
-    FormFieldData(label: 'Width', type: InputFieldType.number),
-    FormFieldData(label: 'Length', type: InputFieldType.number),
-    FormFieldData(label: 'Bluff Height', type: InputFieldType.number),
-
-    // Text Input questions (comma-separated, result in List<String>)
-    FormFieldData(label: 'Birds', type: InputFieldType.text),
     FormFieldData(label: 'Treasure', type: InputFieldType.text),
     FormFieldData(label: 'New Items', type: InputFieldType.text),
-    FormFieldData(label: 'Tree types', type: InputFieldType.text),
-
-    // Multi-Choice questions
-    FormFieldData(label: 'Bluff Comp', type: InputFieldType.multiChoice, options: ['Sand', 'Rock', 'Thick Brush', 'Grass']),
     FormFieldData(label: 'Man Made', type: InputFieldType.multiChoice, options: ['Seawall', 'Sewar Line', 'Walkway', 'Garbage Cans', 'Tents', 'Picnic Tables', 'Benches', 'Houses', 'Playground', 'Bathrooms', 'Campground', 'Protective Structure To Escape the Weather', 'Boat Dock', 'Boat Launch']),
     FormFieldData(label: 'Shade', type: InputFieldType.multiChoice, options: ['in the morning', 'in the evening', 'in the afternoon', 'none']),
-    FormFieldData(label: 'Which Shells', type: InputFieldType.multiChoice, options: ['Butter Clam', 'Mussel', 'Crab', 'Oyster', 'Whelks', 'Turban', 'Sand dollars', 'Cockles', 'Starfish', 'Limpets']),
   ];
   // --- End of form questions ---
 
@@ -172,6 +169,14 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     _countryController.text = 'Canada'; // Default to Canada
     _provinceController.text = 'British Columbia'; // Default to BC
 
+    _beachNameController.addListener(() {
+      if (widget.beachId == null) {
+        setState(() {
+          _appBarTitle = _beachNameController.text.isNotEmpty ? _beachNameController.text : "Add New Beach";
+        });
+      }
+    });
+
     _pageController.addListener(() {
       setState(() {
         _currentPageIndex = _pageController.page?.round() ?? 0;
@@ -180,19 +185,29 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
     // If we're adding a contribution, disable text controllers and use the beach's location
     if (widget.beachId != null) {
+      _appBarTitle = "Add Contribution";
       // You may need to load the beach's details here to populate the text controllers
       // For now, we assume these fields are read-only for contributions
       _beachNameController.text = 'Existing Beach'; // Placeholder
       _shortDescriptionController.text = ''; // Start with an empty description for the new contribution
       // Also, we don't fetch location if it's already provided
       _currentLocation = widget.initialLocation;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FocusScope.of(context).requestFocus(_descriptionFocusNode);
+      });
     } else if (widget.initialLocation != null) {
       // If we are creating a new beach from a map tap
       _currentLocation = widget.initialLocation;
       _reverseGeocodeLocation(_currentLocation!.latitude, _currentLocation!.longitude);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FocusScope.of(context).requestFocus(_beachNameFocusNode);
+      });
     } else {
       // Standard new beach creation, get current GPS location
       _getCurrentLocationAndGeocode();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        FocusScope.of(context).requestFocus(_beachNameFocusNode);
+      });
     }
   }
 
@@ -542,11 +557,21 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final bool isNewBeach = widget.beachId == null;
-    final List<Widget> pages = _buildPages(isNewBeach);
+    final List<Widget> pages = _buildPages(widget.beachId == null);
     final List<String> pageTitles = [
-      "Details", "Flora", "Fauna", "Composition", "Man-Made"
+      "Details", "Flora", "Fauna", "Wood", "Composition", "Other"
     ];
+    if (widget.beachId == null) {
+      _appBarTitle = _beachNameController.text.isNotEmpty
+          ? _beachNameController.text
+          : "Add New Beach";
+    } else {
+      _appBarTitle = "Add Contribution";
+    }
+    if (_currentPageIndex > 0) {
+      _appBarTitle = pageTitles[_currentPageIndex];
+    }
+
 
     // ** FIX: Replaced WillPopScope with PopScope **
     return PopScope(
@@ -563,7 +588,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          title: Text(isNewBeach ? 'Add New Beach' : 'Add Contribution'),
+          title: Text(_appBarTitle),
           backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
           foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
           actions: [
@@ -638,6 +663,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
       children: [
         TextFormField(
           controller: _beachNameController,
+          focusNode: _beachNameFocusNode,
           decoration: const InputDecoration(labelText: 'Beach Name', hintText: 'Enter Here'),
           validator: isNewBeach ? (value) => value!.isEmpty ? 'Please enter a beach name' : null : null,
           onSaved: (value) => _formData['Beach Name'] = value,
@@ -733,18 +759,20 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     );
 
     // Group fields for other pages
-    final floraFields = _formFields.where((f) => ['Trees', 'Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types'].contains(f.label)).toList();
+    final floraFields = _formFields.where((f) => ['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Trees', 'Tree types'].contains(f.label)).toList();
     final faunaFields = _formFields.where((f) => ['Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels', 'Birds', 'Which Shells'].contains(f.label)).toList();
-    final compositionFields = _formFields.where((f) => ['Boulders', 'Sand', 'Pebbles', 'Rocks', 'Mud', 'Stone', 'Coal', 'Bluffs Grade', 'Bluff Comp', 'Bluff Height', 'Width', 'Length', 'Shape', 'Rock Type'].contains(f.label)).toList();
-    final manMadeFields = _formFields.where((f) => !floraFields.contains(f) && !faunaFields.contains(f) && !compositionFields.contains(f)).toList();
+    final woodFields = _formFields.where((f) => ['Kindling', 'Firewood', 'Logs'].contains(f.label)).toList();
+    final compositionFields = _formFields.where((f) => ['Width', 'Length', 'Sand', 'Pebbles', 'Baseball Rocks', 'Rocks', 'Boulders', 'Stone', 'Coal', 'Mud', 'Midden', 'Islands', 'Bluff Height', 'Bluffs Grade', 'Shape', 'Bluff Comp', 'Rock Type'].contains(f.label)).toList();
+    final otherFields = _formFields.where((f) => !floraFields.contains(f) && !faunaFields.contains(f) && !woodFields.contains(f) && !compositionFields.contains(f)).toList();
 
 
     return [
       page1,
       _buildFormPage(floraFields),
       _buildFormPage(faunaFields),
+      _buildFormPage(woodFields),
       _buildFormPage(compositionFields),
-      _buildFormPage(manMadeFields),
+      _buildFormPage(otherFields),
     ];
   }
 

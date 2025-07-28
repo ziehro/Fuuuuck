@@ -22,6 +22,7 @@ class _MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   LatLng? _currentPosition;
   Stream<List<Beach>>? _beachesStream;
+  Beach? _selectedBeach;
 
   bool _showSearchAreaButton = false;
   LatLng? _lastMapCenter;
@@ -138,14 +139,11 @@ class _MapScreenState extends State<MapScreen> {
               final markers = beaches.map((beach) => Marker(
                 markerId: MarkerId(beach.id),
                 position: LatLng(beach.latitude, beach.longitude),
-                infoWindow: InfoWindow(
-                  title: beach.name,
-                  snippet: beach.description,
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (context) => BeachDetailScreen(beachId: beach.id)),
-                  ),
-                ),
+                onTap: () {
+                  setState(() {
+                    _selectedBeach = beach;
+                  });
+                },
               )).toSet();
 
               return GoogleMap(
@@ -155,6 +153,11 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 onMapCreated: _onMapCreated,
                 onCameraMove: _onCameraMove,
+                onTap: (_) {
+                  setState(() {
+                    _selectedBeach = null;
+                  });
+                },
                 markers: markers,
                 myLocationEnabled: true,
                 myLocationButtonEnabled: true,
@@ -162,6 +165,54 @@ class _MapScreenState extends State<MapScreen> {
               );
             },
           ),
+          if (_selectedBeach != null)
+            Positioned(
+              bottom: 100,
+              left: 20,
+              right: 20,
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => BeachDetailScreen(beachId: _selectedBeach!.id),
+                    ),
+                  );
+                },
+                child: Card(
+                  elevation: 5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _selectedBeach!.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _selectedBeach!.description,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
 
           if (_showSearchAreaButton)
             Positioned(
