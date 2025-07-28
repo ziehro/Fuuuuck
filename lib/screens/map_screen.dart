@@ -25,49 +25,39 @@ class _MapScreenState extends State<MapScreen> {
   Beach? _selectedBeach;
 
   bool _showSearchAreaButton = false;
-  LatLngBounds? _lastSearchedBounds;
+  LatLng? _lastMapCenter;
 
   @override
   void initState() {
     super.initState();
-    _initializeLocationAndBeaches();
+    _determineInitialPosition();
   }
 
-  Future<void> _initializeLocationAndBeaches() async {
+  Future<void> _determineInitialPosition() async {
     try {
       PermissionStatus permission = await Permission.locationWhenInUse.request();
       if (!permission.isGranted) {
         _showSnackBar('Location permission is required to find nearby beaches.');
         setState(() {
-          _currentPosition = const LatLng(49.2827, -123.1207);
+          _currentPosition = const LatLng(49.2827, -123.1207); // Default to Vancouver
         });
-        // We still need to load beaches for the default location
-        _loadBeachesForCurrentView();
         return;
       }
 
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
-        _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
       });
-      _loadBeachesForCurrentView();
-
     } catch (e) {
       _showSnackBar('Failed to get current location: $e');
       setState(() {
-        _currentPosition = const LatLng(49.2827, -123.1207);
+        _currentPosition = const LatLng(49.2827, -123.1207); // Default on error
       });
-      _loadBeachesForCurrentView();
     }
   }
 
-  Future<void> _loadBeachesForCurrentView() async {
-    // Wait for map controller to be available
-    if (_mapController == null) {
-      await Future.delayed(const Duration(milliseconds: 500));
-      if (_mapController == null) return;
-    }
+  void _loadBeachesForVisibleRegion() async {
+    if (_mapController == null) return;
 
     final LatLngBounds visibleBounds = await _mapController!.getVisibleRegion();
     final beachDataService = Provider.of<BeachDataService>(context, listen: false);
@@ -75,7 +65,11 @@ class _MapScreenState extends State<MapScreen> {
     setState(() {
       _beachesStream = beachDataService.getBeachesNearby(bounds: visibleBounds);
       _showSearchAreaButton = false;
-      _lastSearchedBounds = visibleBounds;
+      // Use the center of the new bounds as the last searched center
+      _lastMapCenter = LatLng(
+        (visibleBounds.northeast.latitude + visibleBounds.southwest.latitude) / 2,
+        (visibleBounds.northeast.longitude + visibleBounds.southwest.longitude) / 2,
+      );
     });
   }
 
@@ -90,13 +84,26 @@ class _MapScreenState extends State<MapScreen> {
     if (_currentPosition != null) {
       controller.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 10.0));
     }
+    // Perform initial search once map is ready
+    _loadBeachesForVisibleRegion();
   }
 
   void _onCameraMove(CameraPosition position) {
-    if (_lastSearchedBounds != null && !_lastSearchedBounds!.contains(position.target)) {
-      setState(() {
-        _showSearchAreaButton = true;
-      });
+    if (_lastMapCenter != null) {
+      final distance = Geolocator.distanceBetween(
+        _lastMapCenter!.latitude,
+        _lastMapCenter!.longitude,
+        position.target.latitude,
+        position.target.longitude,
+      );
+      // Show the button if the user has panned a significant distance (e.g., 2km)
+      if (distance > 2000) {
+        if (!_showSearchAreaButton) {
+          setState(() {
+            _showSearchAreaButton = true;
+          });
+        }
+      }
     }
   }
 
@@ -149,6 +156,9 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 onMapCreated: _onMapCreated,
                 onCameraMove: _onCameraMove,
+                onCameraIdle: () {
+                  // This can also be used to decide when to show the button
+                },
                 onTap: (_) {
                   setState(() {
                     _selectedBeach = null;
@@ -219,7 +229,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.search),
                   label: const Text('Search this area'),
-                  onPressed: _loadBeachesForCurrentView,
+                  onPressed: _loadBeachesForVisibleRegion,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
