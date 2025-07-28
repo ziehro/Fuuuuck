@@ -6,7 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 
-import 'package:fuuuuck/services/beach_data_service.dart'; // ** FIX: Added this import **
+import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/screens/add_beach_screen.dart';
 import 'package:fuuuuck/screens/beach_detail_screen.dart';
@@ -25,7 +25,7 @@ class _MapScreenState extends State<MapScreen> {
   Beach? _selectedBeach;
 
   bool _showSearchAreaButton = false;
-  LatLng? _lastMapCenter;
+  LatLngBounds? _lastSearchedBounds;
 
   @override
   void initState() {
@@ -40,38 +40,42 @@ class _MapScreenState extends State<MapScreen> {
         _showSnackBar('Location permission is required to find nearby beaches.');
         setState(() {
           _currentPosition = const LatLng(49.2827, -123.1207);
-          _lastMapCenter = _currentPosition;
-          _loadBeachesForLocation(_currentPosition!);
         });
+        // We still need to load beaches for the default location
+        _loadBeachesForCurrentView();
         return;
       }
 
       Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
-        _lastMapCenter = _currentPosition;
-        _loadBeachesForLocation(_currentPosition!);
+        _mapController?.animateCamera(CameraUpdate.newLatLng(_currentPosition!));
       });
+      _loadBeachesForCurrentView();
 
     } catch (e) {
       _showSnackBar('Failed to get current location: $e');
       setState(() {
         _currentPosition = const LatLng(49.2827, -123.1207);
-        _lastMapCenter = _currentPosition;
-        _loadBeachesForLocation(_currentPosition!);
       });
+      _loadBeachesForCurrentView();
     }
   }
 
-  void _loadBeachesForLocation(LatLng location) {
+  Future<void> _loadBeachesForCurrentView() async {
+    // Wait for map controller to be available
+    if (_mapController == null) {
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (_mapController == null) return;
+    }
+
+    final LatLngBounds visibleBounds = await _mapController!.getVisibleRegion();
     final beachDataService = Provider.of<BeachDataService>(context, listen: false);
+
     setState(() {
-      _beachesStream = beachDataService.getBeachesNearby(
-        latitude: location.latitude,
-        longitude: location.longitude,
-      );
+      _beachesStream = beachDataService.getBeachesNearby(bounds: visibleBounds);
       _showSearchAreaButton = false;
-      _lastMapCenter = location;
+      _lastSearchedBounds = visibleBounds;
     });
   }
 
@@ -89,18 +93,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _onCameraMove(CameraPosition position) {
-    if (_lastMapCenter != null) {
-      final distance = Geolocator.distanceBetween(
-        _lastMapCenter!.latitude,
-        _lastMapCenter!.longitude,
-        position.target.latitude,
-        position.target.longitude,
-      );
-      if (distance > 2000) {
-        setState(() {
-          _showSearchAreaButton = true;
-        });
-      }
+    if (_lastSearchedBounds != null && !_lastSearchedBounds!.contains(position.target)) {
+      setState(() {
+        _showSearchAreaButton = true;
+      });
     }
   }
 
@@ -223,17 +219,7 @@ class _MapScreenState extends State<MapScreen> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.search),
                   label: const Text('Search this area'),
-                  onPressed: () async {
-                    if (_mapController != null) {
-                      LatLng newCenter = await _mapController!.getLatLng(
-                        ScreenCoordinate(
-                          x: MediaQuery.of(context).size.width.floor() ~/ 2,
-                          y: MediaQuery.of(context).size.height.floor() ~/ 2,
-                        ),
-                      );
-                      _loadBeachesForLocation(newCenter);
-                    }
-                  },
+                  onPressed: _loadBeachesForCurrentView,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Theme.of(context).appBarTheme.foregroundColor,

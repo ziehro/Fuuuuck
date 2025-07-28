@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:fuuuuck/models/beach_model.dart';
 import 'package:fuuuuck/models/contribution_model.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 
@@ -74,16 +75,21 @@ class BeachDataService {
     }
   }
 
-  Stream<List<Beach>> getBeachesNearby({required double latitude, required double longitude, double radius = 50000}) {
-    final geoHasher = GeoHasher();
-    String centerGeohash = geoHasher.encode(longitude, latitude, precision: 4);
-
+  Stream<List<Beach>> getBeachesNearby({required LatLngBounds bounds}) {
+    // Query for beaches within the latitude and longitude bounds of the visible map area.
     Query query = _firestore.collection('beaches')
-        .where('geohash', isGreaterThanOrEqualTo: centerGeohash)
-        .where('geohash', isLessThan: '$centerGeohash~');
+        .where('latitude', isGreaterThan: bounds.southwest.latitude)
+        .where('latitude', isLessThan: bounds.northeast.latitude);
 
     return query.snapshots().map((snapshot) {
-      return snapshot.docs.map((doc) => Beach.fromFirestore(doc)).toList();
+      // Since Firestore can't query two different fields with range filters,
+      // we do the longitude filtering on the client side.
+      return snapshot.docs
+          .map((doc) => Beach.fromFirestore(doc))
+          .where((beach) =>
+      beach.longitude > bounds.southwest.longitude &&
+          beach.longitude < bounds.northeast.longitude)
+          .toList();
     });
   }
 

@@ -137,10 +137,19 @@ class BeachDetailScreen extends StatelessWidget {
                     pinned: true,
                     leading: const BackButton(),
                     flexibleSpace: FlexibleSpaceBar(
-                      title: Text(beach.name, style: const TextStyle(fontSize: 16, color: Colors.white, backgroundColor: Colors.black45)),
                       background: ImageDescriptionCarousel(
                         imageUrls: beach.imageUrls,
                         descriptions: beach.contributedDescriptions,
+                        contributionCount: beach.totalContributions,
+                      ),
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
+                      child: Text(
+                        beach.name,
+                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
@@ -413,11 +422,13 @@ class BeachDetailScreen extends StatelessWidget {
 class ImageDescriptionCarousel extends StatefulWidget {
   final List<String> imageUrls;
   final List<String> descriptions;
+  final int contributionCount;
 
   const ImageDescriptionCarousel({
     super.key,
     required this.imageUrls,
     required this.descriptions,
+    required this.contributionCount,
   });
 
   @override
@@ -452,6 +463,18 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
                 const Center(child: Icon(Icons.broken_image, size: 100, color: Colors.grey)),
               );
             },
+          ),
+          Positioned(
+            top: 10,
+            right: 10,
+            child: Chip(
+              avatar: const Icon(Icons.people, color: Colors.white),
+              label: Text(
+                '${widget.contributionCount} Contributions',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              backgroundColor: Colors.black.withOpacity(0.6),
+            ),
           ),
           Container(
             width: double.infinity,
