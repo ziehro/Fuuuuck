@@ -14,13 +14,13 @@ class BeachDetailScreen extends StatelessWidget {
 
   // --- Metric Category Keys ---
   static const List<String> floraMetricKeys = [
-    'Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach'
+    'Kelp Beach', 'Seaweed Beach', 'Seaweed Rocks'
   ];
   static const List<String> woodMetricKeys = [
-    'Kindling', 'Firewood', 'Logs', 'Trees'
+    'Firewood', 'Kindling', 'Logs', 'Trees'
   ];
   static const List<String> faunaMetricKeys = [
-    'Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels'
+    'Anemones', 'Barnacles', 'Bugs', 'Clams', 'Limpets', 'Mussels', 'Oysters', 'Snails', 'Turtles'
   ];
   static const List<String> compositionOrderedKeys = [
     'Width', 'Length', 'Sand', 'Pebbles', 'Baseball Rocks', 'Rocks', 'Boulders', 'Stone', 'Coal', 'Mud', 'Midden', 'Islands', 'Bluff Height', 'Bluffs Grade'
@@ -231,7 +231,22 @@ class BeachDetailScreen extends StatelessWidget {
   Widget _buildFloraTab(BuildContext context, Beach beach) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
-      child: _buildMetricsCategoryTab(context, beach, floraMetricKeys),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildMetricsCategoryTab(context, beach, floraMetricKeys),
+          const SizedBox(height: 16),
+          _buildCategoryTitle(context, 'Answers'),
+          if (beach.aggregatedTextItems.containsKey('Tree types'))
+            _buildDataRow(
+              'Tree types',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: (beach.aggregatedTextItems['Tree types'] as List<dynamic>).map((e) => Text(e.toString(), textAlign: TextAlign.end)).toList(),
+              ),
+            ),
+        ],
+      ),
     );
   }
 

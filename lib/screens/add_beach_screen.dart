@@ -101,7 +101,6 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     FormFieldData(label: 'Seaweed Beach', type: InputFieldType.slider, minValue: 1, maxValue: 7),
     FormFieldData(label: 'Seaweed Rocks', type: InputFieldType.slider, minValue: 1, maxValue: 7),
     FormFieldData(label: 'Kelp Beach', type: InputFieldType.slider, minValue: 1, maxValue: 7),
-    FormFieldData(label: 'Trees', type: InputFieldType.slider, minValue: 1, maxValue: 5),
     FormFieldData(label: 'Tree types', type: InputFieldType.text),
 
     // Fauna
@@ -121,6 +120,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     FormFieldData(label: 'Kindling', type: InputFieldType.slider, minValue: 1, maxValue: 5),
     FormFieldData(label: 'Firewood', type: InputFieldType.slider, minValue: 1, maxValue: 5),
     FormFieldData(label: 'Logs', type: InputFieldType.slider, minValue: 1, maxValue: 5),
+    FormFieldData(label: 'Trees', type: InputFieldType.slider, minValue: 1, maxValue: 5),
 
     // Composition
     FormFieldData(label: 'Width', type: InputFieldType.number),
@@ -136,7 +136,7 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     FormFieldData(label: 'Midden', type: InputFieldType.slider, minValue: 1, maxValue: 5),
     FormFieldData(label: 'Islands', type: InputFieldType.slider, minValue: 1, maxValue: 5),
     FormFieldData(label: 'Bluff Height', type: InputFieldType.number),
-    FormFieldData(label: 'Bluffs Grade', type: InputFieldType.slider, minValue: 1, maxValue: 9),
+    FormFieldData(label: 'Bluffs Grade', type: InputFieldType.slider, minValue: 0, maxValue: 90),
     FormFieldData(label: 'Shape', type: InputFieldType.singleChoice, options: ['Concave', 'Convex', 'Isthmus', 'Horseshoe', 'Straight']),
     FormFieldData(label: 'Bluff Comp', type: InputFieldType.multiChoice, options: ['Sand', 'Rock', 'Thick Brush', 'Grass']),
     FormFieldData(label: 'Rock Type', type: InputFieldType.singleChoice, options: ['Igneous', 'Sedimentary', 'Metamorphic']),
@@ -759,9 +759,9 @@ class _AddBeachScreenState extends State<AddBeachScreen> {
     );
 
     // Group fields for other pages
-    final floraFields = _formFields.where((f) => ['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Trees', 'Tree types'].contains(f.label)).toList();
+    final floraFields = _formFields.where((f) => ['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types'].contains(f.label)).toList();
     final faunaFields = _formFields.where((f) => ['Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels', 'Birds', 'Which Shells'].contains(f.label)).toList();
-    final woodFields = _formFields.where((f) => ['Kindling', 'Firewood', 'Logs'].contains(f.label)).toList();
+    final woodFields = _formFields.where((f) => ['Kindling', 'Firewood', 'Logs', 'Trees'].contains(f.label)).toList();
     final compositionFields = _formFields.where((f) => ['Width', 'Length', 'Sand', 'Pebbles', 'Baseball Rocks', 'Rocks', 'Boulders', 'Stone', 'Coal', 'Mud', 'Midden', 'Islands', 'Bluff Height', 'Bluffs Grade', 'Shape', 'Bluff Comp', 'Rock Type'].contains(f.label)).toList();
     final otherFields = _formFields.where((f) => !floraFields.contains(f) && !faunaFields.contains(f) && !woodFields.contains(f) && !compositionFields.contains(f)).toList();
 
