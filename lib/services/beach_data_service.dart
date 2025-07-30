@@ -28,6 +28,17 @@ class BeachDataService {
     }
   }
 
+  Future<List<String>> uploadImages(List<String> imagePaths) async {
+    final List<String> imageUrls = [];
+    for (String path in imagePaths) {
+      final imageUrl = await uploadImage(File(path));
+      if (imageUrl != null) {
+        imageUrls.add(imageUrl);
+      }
+    }
+    return imageUrls;
+  }
+
   Future<String?> addBeach({
     required Beach initialBeach,
     required Contribution initialContribution,

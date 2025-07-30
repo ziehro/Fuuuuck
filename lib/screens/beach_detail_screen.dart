@@ -1,3 +1,4 @@
+// lib/screens/beach_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fuuuuck/models/beach_model.dart';
@@ -6,6 +7,8 @@ import 'package:fuuuuck/screens/add_beach_screen.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:fuuuuck/services/api/inaturalist_service.dart';
 import 'package:fuuuuck/util/metric_ranges.dart';
+import 'package:fuuuuck/services/gemini_service.dart';
+import 'package:fuuuuck/util/long_press_descriptions.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
@@ -29,6 +32,66 @@ class BeachDetailScreen extends StatelessWidget {
   ];
   // --- End of Keys ---
 
+  void _showInfoDialog(BuildContext context, String subject) {
+    final GeminiService geminiService = GeminiService();
+    // Get the description from our new map, or use a default if not found.
+    final String description = longPressDescriptions[subject] ?? 'No description available.';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return FutureBuilder<GeminiInfo>(
+          future: geminiService.getInfoAndImage(subject, description: description),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const AlertDialog(
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading info...'),
+                  ],
+                ),
+              );
+            }
+
+            if (snapshot.hasError || !snapshot.hasData) {
+              return AlertDialog(
+                title: const Text('Error'),
+                content: const Text('Could not load information.'),
+                actions: [
+                  TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+                ],
+              );
+            }
+
+            final info = snapshot.data!;
+            return AlertDialog(
+              title: Text(subject),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: 150,
+                      width: double.infinity,
+                      child: info.image,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(info.description),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
   void _showFloraFaunaDetailsDialog(BuildContext context, String name, Map<String, dynamic> details) {
     final String imageUrl = details['imageUrl'] ?? '';
@@ -258,6 +321,7 @@ class BeachDetailScreen extends StatelessWidget {
           _buildCategoryTitle(context, 'Answers'),
           if (beach.aggregatedTextItems.containsKey('Tree types'))
             _buildDataRow(
+              context,
               'Tree types',
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -280,6 +344,7 @@ class BeachDetailScreen extends StatelessWidget {
           _buildCategoryTitle(context, 'Answers'),
           if (beach.aggregatedTextItems.containsKey('Birds'))
             _buildDataRow(
+              context,
               'Birds',
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -288,6 +353,7 @@ class BeachDetailScreen extends StatelessWidget {
             ),
           if (beach.aggregatedMultiChoices.containsKey('Which Shells'))
             _buildDataRow(
+              context,
               'Which Shells',
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -307,16 +373,30 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildCompositionTab(BuildContext context, Beach beach) {
+    // Keys that will be handled by the generic metrics tab logic, excluding Width and Length
+    final List<String> remainingCompositionKeys = List.from(compositionOrderedKeys)
+      ..remove('Width')
+      ..remove('Length');
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildMetricsCategoryTab(context, beach, compositionOrderedKeys, isComposition: true),
+          // Explicitly handle Width and Length at the top for visibility
+          if (beach.aggregatedMetrics.containsKey('Width'))
+            _buildDataRow(context, 'Width', Text('${beach.aggregatedMetrics['Width']!.toStringAsFixed(0)} steps', textAlign: TextAlign.end)),
+          if (beach.aggregatedMetrics.containsKey('Length'))
+            _buildDataRow(context, 'Length', Text('${beach.aggregatedMetrics['Length']!.toStringAsFixed(0)} steps', textAlign: TextAlign.end)),
+
+          // Handle the rest of the metrics using the generic builder
+          _buildMetricsCategoryTab(context, beach, remainingCompositionKeys, isComposition: true),
+
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'Answers'),
           if (beach.aggregatedSingleChoices.containsKey('Shape'))
             _buildDataRow(
+              context,
               'Shape',
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -325,6 +405,7 @@ class BeachDetailScreen extends StatelessWidget {
             ),
           if (beach.aggregatedMultiChoices.containsKey('Bluff Comp'))
             _buildDataRow(
+              context,
               'Bluff Comp',
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -333,6 +414,7 @@ class BeachDetailScreen extends StatelessWidget {
             ),
           if (beach.aggregatedSingleChoices.containsKey('Rock Type'))
             _buildDataRow(
+              context,
               'Rock Type',
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
@@ -359,12 +441,12 @@ class BeachDetailScreen extends StatelessWidget {
           ...otherSingleChoiceAnswers.entries.map<Widget>((entry) {
             final choices = (entry.value as Map<String, dynamic>).entries.toList()..sort((a, b) => (b.value as int).compareTo(a.value as int));
             final answerWidgets = choices.map<Widget>((choice) => Text('${choice.key}: ${choice.value}')).toList();
-            return _buildDataRow(entry.key, Column(crossAxisAlignment: CrossAxisAlignment.end, children: answerWidgets));
+            return _buildDataRow(context, entry.key, Column(crossAxisAlignment: CrossAxisAlignment.end, children: answerWidgets));
           }).toList(),
           ...otherMultiChoiceAnswers.entries.map<Widget>((entry) {
             final choices = (entry.value as Map<String, dynamic>).entries.toList()..sort((a, b) => (b.value as int).compareTo(a.value as int));
             final answerWidgets = choices.map<Widget>((choice) => Text('${choice.key}: ${choice.value}')).toList();
-            return _buildDataRow(entry.key, Column(crossAxisAlignment: CrossAxisAlignment.end, children: answerWidgets));
+            return _buildDataRow(context, entry.key, Column(crossAxisAlignment: CrossAxisAlignment.end, children: answerWidgets));
           }).toList(),
         ],
       ),
@@ -396,7 +478,9 @@ class BeachDetailScreen extends StatelessWidget {
     }
 
     if (filteredMetrics.isEmpty) {
-      return const Center(child: Text("No data for this category yet."));
+      // Return an empty container if there are no other metrics to display.
+      // The main tab builder will handle showing a message if the whole tab is empty.
+      return const SizedBox.shrink();
     }
 
     return Column(
@@ -404,14 +488,18 @@ class BeachDetailScreen extends StatelessWidget {
       children: filteredMetrics.entries.map((entry) {
         final range = metricRanges[entry.key];
         if (range != null) {
-          return MetricScaleBar(
-            label: entry.key,
-            value: entry.value,
-            min: range.min.toDouble(),
-            max: range.max.toDouble(),
+          return GestureDetector(
+            onLongPress: () => _showInfoDialog(context, entry.key),
+            child: MetricScaleBar(
+              label: entry.key,
+              value: entry.value,
+              min: range.min.toDouble(),
+              max: range.max.toDouble(),
+            ),
           );
         }
-        return _buildDataRow(entry.key, Text(entry.value.toStringAsFixed(2), textAlign: TextAlign.end));
+        // This handles metrics that don't use a slider, like Bluff Height
+        return _buildDataRow(context, entry.key, Text(entry.value.toStringAsFixed(2), textAlign: TextAlign.end));
       }).toList(),
     );
   }
@@ -429,7 +517,7 @@ class BeachDetailScreen extends StatelessWidget {
               ...beach.identifiedFloraFauna.entries.map((entry) {
                 return InkWell(
                   onLongPress: () => _showFloraFaunaDetailsDialog(context, entry.key, entry.value),
-                  child: _buildDataRow(entry.key, Text('Count: ${entry.value['count']}', textAlign: TextAlign.end)),
+                  child: _buildDataRow(context, entry.key, Text('Count: ${entry.value['count']}', textAlign: TextAlign.end)),
                 );
               }),
           ],
@@ -443,18 +531,21 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDataRow(String key, Widget value) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Expanded(flex: 2, child: Text(key, style: const TextStyle(fontWeight: FontWeight.bold))),
-            Expanded(flex: 3, child: value),
-          ],
+  Widget _buildDataRow(BuildContext context, String key, Widget value) {
+    return GestureDetector(
+      onLongPress: () => _showInfoDialog(context, key),
+      child: Card(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(flex: 2, child: Text(key, style: const TextStyle(fontWeight: FontWeight.bold))),
+              Expanded(flex: 3, child: value),
+            ],
+          ),
         ),
       ),
     );
