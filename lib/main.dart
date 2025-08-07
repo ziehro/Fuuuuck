@@ -1,6 +1,9 @@
 // lib/main.dart
+import 'dart:io'; // <-- added for Platform checks
+
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_app_check/firebase_app_check.dart'; // <-- added
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fuuuuck/services/sync_service.dart';
@@ -18,13 +21,31 @@ const Color arbutusCream = Color(0xFFF5F5DC); // Beige
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 1) Firebase core
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // 2) App Check — Debug now; flip to Play Integrity/DeviceCheck for production
+  await FirebaseAppCheck.instance.activate(
+    androidProvider: Platform.isAndroid
+    // Use Debug during development; switch to Play Integrity for release builds
+        ? AndroidProvider.debug // change to AndroidProvider.playIntegrity for prod
+        : AndroidProvider.debug,
+    appleProvider:
+    AppleProvider.debug, // change to AppleProvider.deviceCheck for prod
+  );
+
+  // 3) Firestore offline persistence (unchanged)
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
+
+  // 4) Start any background sync
   SyncService();
+
+  // 5) App start
   runApp(
     MultiProvider(
       providers: [
@@ -36,6 +57,7 @@ void main() async {
     ),
   );
 }
+
 // Renamed MyApp to RootApp to clearly separate it from MyAppContent
 class RootApp extends StatelessWidget {
   const RootApp({super.key});
@@ -89,7 +111,6 @@ class RootApp extends StatelessWidget {
   }
 
   // Helper function to create a MaterialColor from a single Color
-  // Keep this as a top-level function or static method if used outside the class
   static MaterialColor _createMaterialColor(Color color) {
     List<double> strengths = <double>[.05];
     Map<int, Color> swatch = {};
