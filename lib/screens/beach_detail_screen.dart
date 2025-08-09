@@ -22,7 +22,7 @@ class BeachDetailScreen extends StatelessWidget {
   static const List<String> floraMetricKeys = [
     'Kelp Beach', 'Seaweed Beach', 'Seaweed Rocks'
   ];
-  // Reordered from smallest to largest (kindling -> firewood -> logs -> trees)
+  // Fixed order: kindling -> firewood -> logs -> trees
   static const List<String> woodMetricKeys = [
     'Kindling', 'Firewood', 'Logs', 'Trees'
   ];
@@ -37,7 +37,6 @@ class BeachDetailScreen extends StatelessWidget {
 
   void _showInfoDialog(BuildContext context, String subject) {
     final GeminiService geminiService = GeminiService();
-    // Get the description from our new map, or use a default if not found.
     final String description = longPressDescriptions[subject] ?? 'No description available.';
 
     showDialog(
@@ -342,6 +341,7 @@ class BeachDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // This will now render in the exact order of faunaMetricKeys (alphabetical)
           _buildMetricsCategoryTab(context, beach, faunaMetricKeys),
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'Answers'),
@@ -371,12 +371,12 @@ class BeachDetailScreen extends StatelessWidget {
   Widget _buildWoodTab(BuildContext context, Beach beach) {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
+      // This will now render Kindling -> Firewood -> Logs -> Trees
       child: _buildMetricsCategoryTab(context, beach, woodMetricKeys),
     );
   }
 
   Widget _buildCompositionTab(BuildContext context, Beach beach) {
-    // Keys that will be handled by the generic metrics tab logic, excluding Width and Length
     final List<String> remainingCompositionKeys = List.from(compositionOrderedKeys)
       ..remove('Width')
       ..remove('Length');
@@ -386,12 +386,8 @@ class BeachDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Display Width and Length side by side as slider-style bars at the top
           _buildDimensionsRow(context, beach),
-
-          // Handle the rest of the metrics using the generic builder
           _buildMetricsCategoryTab(context, beach, remainingCompositionKeys, isComposition: true),
-
           const SizedBox(height: 16),
           _buildCategoryTitle(context, 'Answers'),
           if (beach.aggregatedSingleChoices.containsKey('Shape'))
@@ -426,7 +422,6 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
-  // New method to create dimensions row with both width and length side by side
   Widget _buildDimensionsRow(BuildContext context, Beach beach) {
     final bool hasWidth = beach.aggregatedMetrics.containsKey('Width');
     final bool hasLength = beach.aggregatedMetrics.containsKey('Length');
@@ -463,14 +458,13 @@ class BeachDetailScreen extends StatelessWidget {
       ],
     );
   }
+
   Widget _buildDimensionBar({
     required String label,
     required double value,
     required String unit,
   }) {
-    // Create a visual representation similar to the slider bars
-    // We'll use a fixed max for visual purposes, but show the actual value
-    final double visualMax = 1000.0; // Arbitrary max for visual scaling
+    final double visualMax = 1000.0;
     final double percentage = (value / visualMax).clamp(0.0, 1.0);
 
     return Card(
@@ -496,11 +490,11 @@ class BeachDetailScreen extends StatelessWidget {
                 color: Colors.grey[300],
               ),
               child: FractionallySizedBox(
-                widthFactor: percentage > 0.05 ? percentage : 0.05, // Minimum visible bar
+                widthFactor: percentage > 0.05 ? percentage : 0.05,
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(5),
-                    color: arbutusGreen, // Use the app's green color
+                    color: arbutusGreen,
                   ),
                 ),
               ),
@@ -542,29 +536,26 @@ class BeachDetailScreen extends StatelessWidget {
     final Map<String, double> filteredMetrics = {};
 
     if (includeOther) {
+      // leave "Other" as-is (not requested); it will show anything not in known lists.
       final allKnownKeys = [...floraMetricKeys, ...faunaMetricKeys, ...compositionOrderedKeys, ...woodMetricKeys];
       beach.aggregatedMetrics.forEach((key, value) {
         if (!allKnownKeys.contains(key)) {
           filteredMetrics[key] = value;
         }
       });
-    } else if (isComposition) {
-      for (var key in keys) {
-        if (beach.aggregatedMetrics.containsKey(key)) {
-          filteredMetrics[key] = beach.aggregatedMetrics[key]!;
+    } else {
+      // IMPORTANT CHANGE: always respect the order of `keys`
+      for (final key in keys) {
+        final v = beach.aggregatedMetrics[key];
+        if (v != null) {
+          filteredMetrics[key] = v;
         }
       }
-    } else {
-      beach.aggregatedMetrics.forEach((key, value) {
-        if (keys.contains(key)) {
-          filteredMetrics[key] = value;
-        }
-      });
+
+      // Composition already passes an ordered `keys`, so the above covers both cases.
     }
 
     if (filteredMetrics.isEmpty) {
-      // Return an empty container if there are no other metrics to display.
-      // The main tab builder will handle showing a message if the whole tab is empty.
       return const SizedBox.shrink();
     }
 
@@ -583,7 +574,6 @@ class BeachDetailScreen extends StatelessWidget {
             ),
           );
         }
-        // This handles metrics that don't use a slider, like Bluff Height
         return _buildDataRow(context, entry.key, Text(entry.value.toStringAsFixed(2), textAlign: TextAlign.end));
       }).toList(),
     );
