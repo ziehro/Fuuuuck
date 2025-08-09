@@ -10,6 +10,9 @@ import 'package:fuuuuck/util/metric_ranges.dart';
 import 'package:fuuuuck/services/gemini_service.dart';
 import 'package:fuuuuck/util/long_press_descriptions.dart';
 
+// Import the app green color from main.dart
+const Color arbutusGreen = Color(0xFF228B22); // Forest Green
+
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
 
@@ -19,7 +22,7 @@ class BeachDetailScreen extends StatelessWidget {
   static const List<String> floraMetricKeys = [
     'Kelp Beach', 'Seaweed Beach', 'Seaweed Rocks'
   ];
-  // Reordered from biggest to smallest
+  // Reordered from smallest to largest (kindling -> firewood -> logs -> trees)
   static const List<String> woodMetricKeys = [
     'Kindling', 'Firewood', 'Logs', 'Trees'
   ];
@@ -383,13 +386,9 @@ class BeachDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Explicit header for Length & Width
-          if (beach.aggregatedMetrics.containsKey('Width') || beach.aggregatedMetrics.containsKey('Length'))
-            _CompositionSizeHeader(
-              width:  beach.aggregatedMetrics['Width'],
-              length: beach.aggregatedMetrics['Length'],
-              unitLabel: 'steps', // keep your unit; change to 'm' if you switch
-            ),
+          // Display Width and Length side by side as slider-style bars at the top
+          _buildDimensionsRow(context, beach),
+
           // Handle the rest of the metrics using the generic builder
           _buildMetricsCategoryTab(context, beach, remainingCompositionKeys, isComposition: true),
 
@@ -423,6 +422,91 @@ class BeachDetailScreen extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+
+  // New method to create dimensions row with both width and length side by side
+  Widget _buildDimensionsRow(BuildContext context, Beach beach) {
+    final bool hasWidth = beach.aggregatedMetrics.containsKey('Width');
+    final bool hasLength = beach.aggregatedMetrics.containsKey('Length');
+
+    if (!hasWidth && !hasLength) {
+      return const SizedBox.shrink();
+    }
+
+    return Row(
+      children: [
+        if (hasWidth)
+          Expanded(
+            child: GestureDetector(
+              onLongPress: () => _showInfoDialog(context, 'Width'),
+              child: _buildDimensionBar(
+                label: 'Width',
+                value: beach.aggregatedMetrics['Width']!,
+                unit: 'steps',
+              ),
+            ),
+          ),
+        if (hasWidth && hasLength) const SizedBox(width: 8),
+        if (hasLength)
+          Expanded(
+            child: GestureDetector(
+              onLongPress: () => _showInfoDialog(context, 'Length'),
+              child: _buildDimensionBar(
+                label: 'Length',
+                value: beach.aggregatedMetrics['Length']!,
+                unit: 'steps',
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+  Widget _buildDimensionBar({
+    required String label,
+    required double value,
+    required String unit,
+  }) {
+    // Create a visual representation similar to the slider bars
+    // We'll use a fixed max for visual purposes, but show the actual value
+    final double visualMax = 1000.0; // Arbitrary max for visual scaling
+    final double percentage = (value / visualMax).clamp(0.0, 1.0);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.all(12.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text('${value.toStringAsFixed(0)} $unit', style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              height: 10,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(5),
+                color: Colors.grey[300],
+              ),
+              child: FractionallySizedBox(
+                widthFactor: percentage > 0.05 ? percentage : 0.05, // Minimum visible bar
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(5),
+                    color: arbutusGreen, // Use the app's green color
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -724,64 +808,5 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
     return false;
-  }
-
-
-}
-class _CompositionSizeHeader extends StatelessWidget {
-  final double? length;
-  final double? width;
-  final String unitLabel;
-
-  const _CompositionSizeHeader({
-    required this.length,
-    required this.width,
-    this.unitLabel = 'steps',
-  });
-
-  String _fmt(double? v) {
-    if (v == null) return '';
-    // no decimals for steps
-    return '${v.toStringAsFixed(0)} $unitLabel';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final chips = <Widget>[];
-    if (length != null) {
-      chips.add(_Chipish(label: 'Length', value: _fmt(length)));
-    }
-    if (width != null) {
-      chips.add(_Chipish(label: 'Width', value: _fmt(width)));
-    }
-    if (chips.isEmpty) return const SizedBox.shrink();
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: chips,
-      ),
-    );
-  }
-}
-
-class _Chipish extends StatelessWidget {
-  final String label;
-  final String value;
-  const _Chipish({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surfaceVariant,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text('$label: $value', style: theme.textTheme.bodyMedium),
-    );
   }
 }

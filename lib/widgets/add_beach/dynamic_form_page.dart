@@ -7,11 +7,33 @@ class DynamicFormPage extends StatelessWidget {
   final List<FormFieldData> fields;
   final Map<String, dynamic> formData;
 
+  // Optional controllers for specific numeric fields
+  final TextEditingController? widthController;
+  final TextEditingController? lengthController;
+  final TextEditingController? bluffHeightController;
+
   const DynamicFormPage({
     super.key,
     required this.fields,
     required this.formData,
+    this.widthController,
+    this.lengthController,
+    this.bluffHeightController,
   });
+
+  // Get dedicated controller if one exists for this field
+  TextEditingController? _getDedicatedController(String fieldLabel) {
+    switch (fieldLabel) {
+      case 'Width':
+        return widthController;
+      case 'Length':
+        return lengthController;
+      case 'Bluff Height':
+        return bluffHeightController;
+      default:
+        return null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,6 +44,7 @@ class DynamicFormPage extends StatelessWidget {
           return FormFieldWidget(
             field: field,
             formData: formData,
+            controller: _getDedicatedController(field.label),
           );
         }).toList(),
       ),

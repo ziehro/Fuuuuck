@@ -31,7 +31,6 @@ class AddBeachScreen extends StatefulWidget {
   @override
   State<AddBeachScreen> createState() => _AddBeachScreenState();
 }
-
 class _SaveDialogResult {
   final bool confirmed;
   final bool includeAiImage;
@@ -49,10 +48,16 @@ class _AddBeachScreenState extends State<AddBeachScreen>
   final FocusNode _beachNameFocusNode = FocusNode();
 
   final TextEditingController _beachNameController = TextEditingController();
-  final TextEditingController _shortDescriptionController = TextEditingController();
+  final TextEditingController _shortDescriptionController =
+  TextEditingController();
   final TextEditingController _countryController = TextEditingController();
   final TextEditingController _provinceController = TextEditingController();
   final TextEditingController _municipalityController = TextEditingController();
+
+  // Add specific controllers for the numeric fields that are losing values
+  final TextEditingController _widthController = TextEditingController();
+  final TextEditingController _lengthController = TextEditingController();
+  final TextEditingController _bluffHeightController = TextEditingController();
 
   List<String> _localImagePaths = [];
   List<ConfirmedIdentification> _scannerConfirmedIdentifications = [];
@@ -77,13 +82,45 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     super.initState();
     _groupFormFields();
     _initializeScreen();
+    _setupNumberFieldListeners();
+  }
+
+  void _setupNumberFieldListeners() {
+    // Set up listeners to sync the controllers with form data
+    _widthController.addListener(() {
+      final value = _widthController.text.isEmpty ? null : double.tryParse(_widthController.text);
+      if (value != null) {
+        _formData['Width'] = value;
+      } else {
+        _formData.remove('Width');
+      }
+    });
+
+    _lengthController.addListener(() {
+      final value = _lengthController.text.isEmpty ? null : double.tryParse(_lengthController.text);
+      if (value != null) {
+        _formData['Length'] = value;
+      } else {
+        _formData.remove('Length');
+      }
+    });
+
+    _bluffHeightController.addListener(() {
+      final value = _bluffHeightController.text.isEmpty ? null : double.tryParse(_bluffHeightController.text);
+      if (value != null) {
+        _formData['Bluff Height'] = value;
+      } else {
+        _formData.remove('Bluff Height');
+      }
+    });
   }
 
   void _groupFormFields() {
     _floraFields = beachFormFields
-        .where((f) => ['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types'].contains(f.label))
+        .where((f) =>
+        ['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types']
+            .contains(f.label))
         .toList();
-
     _faunaFields = beachFormFields
         .where((f) => [
       'Anemones',
@@ -99,11 +136,9 @@ class _AddBeachScreenState extends State<AddBeachScreen>
       'Which Shells'
     ].contains(f.label))
         .toList();
-
     _woodFields = beachFormFields
         .where((f) => ['Kindling', 'Firewood', 'Logs', 'Trees'].contains(f.label))
         .toList();
-
     _compositionFields = beachFormFields
         .where((f) => [
       'Width',
@@ -125,7 +160,6 @@ class _AddBeachScreenState extends State<AddBeachScreen>
       'Rock Type'
     ].contains(f.label))
         .toList();
-
     _otherFields = beachFormFields
         .where((f) =>
     !_floraFields.contains(f) &&
@@ -142,8 +176,9 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     _beachNameController.addListener(() {
       if (widget.beachId == null) {
         setState(() {
-          _appBarTitle =
-          _beachNameController.text.isNotEmpty ? _beachNameController.text : "Add New Beach";
+          _appBarTitle = _beachNameController.text.isNotEmpty
+              ? _beachNameController.text
+              : "Add New Beach";
         });
       }
     });
@@ -162,7 +197,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
               (_) => FocusScope.of(context).requestFocus(_descriptionFocusNode));
     } else if (widget.initialLocation != null) {
       _currentLocation = widget.initialLocation;
-      _reverseGeocodeLocation(_currentLocation!.latitude, _currentLocation!.longitude);
+      _reverseGeocodeLocation(
+          _currentLocation!.latitude, _currentLocation!.longitude);
       WidgetsBinding.instance.addPostFrameCallback(
               (_) => FocusScope.of(context).requestFocus(_beachNameFocusNode));
     } else {
@@ -184,10 +220,12 @@ class _AddBeachScreenState extends State<AddBeachScreen>
 
       if (permission == LocationPermission.whileInUse ||
           permission == LocationPermission.always) {
-        Position position =
-        await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-        setState(() => _currentLocation = LatLng(position.latitude, position.longitude));
-        await _reverseGeocodeLocation(_currentLocation!.latitude, _currentLocation!.longitude);
+        Position position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high);
+        setState(() =>
+        _currentLocation = LatLng(position.latitude, position.longitude));
+        await _reverseGeocodeLocation(
+            _currentLocation!.latitude, _currentLocation!.longitude);
       } else {
         _showSnackBar('Location permission denied.');
       }
@@ -198,9 +236,11 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     }
   }
 
-  Future<void> _reverseGeocodeLocation(double latitude, double longitude) async {
+  Future<void> _reverseGeocodeLocation(
+      double latitude, double longitude) async {
     try {
-      List<Placemark> placemarks = await placemarkFromCoordinates(latitude, longitude);
+      List<Placemark> placemarks =
+      await placemarkFromCoordinates(latitude, longitude);
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
         setState(() {
@@ -262,6 +302,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
   }
 
   // --- Save confirmation dialog (with AI checkbox) ---
+
+
   Future<_SaveDialogResult?> _showSaveConfirmDialog() async {
     bool includeAi = false; // default OFF
     return showDialog<_SaveDialogResult>(
@@ -287,13 +329,13 @@ class _AddBeachScreenState extends State<AddBeachScreen>
             ),
             actions: [
               TextButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(const _SaveDialogResult(false, false)),
+                onPressed: () => Navigator.of(context)
+                    .pop(const _SaveDialogResult(false, false)),
                 child: const Text('Cancel'),
               ),
               TextButton(
-                onPressed: () =>
-                    Navigator.of(context).pop(_SaveDialogResult(true, includeAi)),
+                onPressed: () => Navigator.of(context)
+                    .pop(_SaveDialogResult(true, includeAi)),
                 child: const Text('Save'),
               ),
             ],
@@ -341,108 +383,110 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     // Avoid trying to upload when offline
     final connectivity = await Connectivity().checkConnectivity();
     if (connectivity == ConnectivityResult.none) {
-      _showSnackBar('No internet connection. Try again when you’re online.');
-      setState(() => _isSaving = false);
-      return;
+      _showSnackBar('No internet connection. Try again when you are online.');
+          setState(() => _isSaving = false);
+    return;
     }
 
     try {
-      final beachDataService = Provider.of<BeachDataService>(context, listen: false);
-      _formData['Short Description'] = _shortDescriptionController.text;
+    final beachDataService =
+    Provider.of<BeachDataService>(context, listen: false);
+    _formData['Short Description'] = _shortDescriptionController.text;
 
-      List<String> imageUrls = [];
+    List<String> imageUrls = [];
 
-      if (includeAiImage) {
-        final aiPrompt = _buildAiImagePrompt();
-        _showSnackBar('Uploading photo(s) and generating AI image...');
-        final combined = await beachDataService.uploadUserAndAiImages(
-          beachId: widget.beachId ?? 'new', // ok pre-ID
-          userImageFile: File(_localImagePaths.first),
-          aiPrompt: aiPrompt,
-        );
-        imageUrls = [combined['user']!, combined['ai']!];
-      } else {
-        _showSnackBar('Uploading photo(s)...');
-        imageUrls = await beachDataService.uploadImages(_localImagePaths);
-      }
+    if (includeAiImage) {
+    final aiPrompt = _buildAiImagePrompt();
+    _showSnackBar('Uploading photo(s) and generating AI image...');
+    final combined = await beachDataService.uploadUserAndAiImages(
+    beachId: widget.beachId ?? 'new', // ok pre-ID
+    userImageFile: File(_localImagePaths.first),
+    aiPrompt: aiPrompt,
+    );
+    imageUrls = [combined['user']!, combined['ai']!];
+    } else {
+    _showSnackBar('Uploading photo(s)...');
+    imageUrls = await beachDataService.uploadImages(_localImagePaths);
+    }
 
-      if (imageUrls.isEmpty) {
-        _showSnackBar('Failed to upload images.');
-        setState(() => _isSaving = false);
-        return;
-      }
+    if (imageUrls.isEmpty) {
+    _showSnackBar('Failed to upload images.');
+    setState(() => _isSaving = false);
+    return;
+    }
 
-      final contribution = Contribution(
-        userId: authService.currentUser!.uid,
-        userEmail: authService.currentUser!.email ?? '',
-        timestamp: Timestamp.now(),
-        latitude: _currentLocation!.latitude,
-        longitude: _currentLocation!.longitude,
-        contributedImageUrls: imageUrls,
-        userAnswers: _formData,
-        aiConfirmedFloraFauna: _scannerConfirmedIdentifications,
-        aiConfirmedRockTypes: [],
-      );
+    final contribution = Contribution(
+    userId: authService.currentUser!.uid,
+    userEmail: authService.currentUser!.email ?? '',
+    timestamp: Timestamp.now(),
+    latitude: _currentLocation!.latitude,
+    longitude: _currentLocation!.longitude,
+    contributedImageUrls: imageUrls,
+    userAnswers: _formData,
+    aiConfirmedFloraFauna: _scannerConfirmedIdentifications,
+    aiConfirmedRockTypes: [],
+    );
 
-      if (widget.beachId != null) {
-        await beachDataService.addContribution(
-          beachId: widget.beachId!,
-          contribution: contribution,
-          userLatitude: _currentLocation!.latitude,
-          userLongitude: _currentLocation!.longitude,
-        );
-        _showSnackBar('Contribution added successfully!');
-      } else {
-        _showSnackBar('Generating AI description...');
-        final String aiDescription = await _geminiService.generateBeachDescription(
-          beachName: _beachNameController.text,
-          userAnswers: _formData,
-        );
+    if (widget.beachId != null) {
+    await beachDataService.addContribution(
+    beachId: widget.beachId!,
+    contribution: contribution,
+    userLatitude: _currentLocation!.latitude,
+    userLongitude: _currentLocation!.longitude,
+    );
+    _showSnackBar('Contribution added successfully!');
+    } else {
+    _showSnackBar('Generating AI description...');
+    final String aiDescription =
+    await _geminiService.generateBeachDescription(
+    beachName: _beachNameController.text,
+    userAnswers: _formData,
+    );
 
-        final initialBeach = Beach(
-          id: '',
-          name: _beachNameController.text,
-          latitude: _currentLocation!.latitude,
-          longitude: _currentLocation!.longitude,
-          // GeoHasher.encode expects (longitude, latitude)
-          geohash: GeoHasher().encode(
-            _currentLocation!.longitude,
-            _currentLocation!.latitude,
-            precision: 9,
-          ),
-          country: _countryController.text,
-          province: _provinceController.text,
-          municipality: _municipalityController.text,
-          description: _shortDescriptionController.text,
-          aiDescription: aiDescription,
-          imageUrls: imageUrls,
-          timestamp: Timestamp.now(),
-          lastAggregated: Timestamp.now(),
-          totalContributions: 0,
-          aggregatedMetrics: {},
-          aggregatedSingleChoices: {},
-          aggregatedMultiChoices: {},
-          aggregatedTextItems: {},
-          identifiedFloraFauna: {},
-          identifiedRockTypesComposition: {},
-          identifiedBeachComposition: {},
-          discoveryQuestions: [],
-          educationalInfo: '',
-          contributedDescriptions: [_shortDescriptionController.text],
-        );
+    final initialBeach = Beach(
+    id: '',
+    name: _beachNameController.text,
+    latitude: _currentLocation!.latitude,
+    longitude: _currentLocation!.longitude,
+    // GeoHasher.encode expects (longitude, latitude)
+    geohash: GeoHasher().encode(
+    _currentLocation!.longitude,
+    _currentLocation!.latitude,
+    precision: 9,
+    ),
+    country: _countryController.text,
+    province: _provinceController.text,
+    municipality: _municipalityController.text,
+    description: _shortDescriptionController.text,
+    aiDescription: aiDescription,
+    imageUrls: imageUrls,
+    timestamp: Timestamp.now(),
+    lastAggregated: Timestamp.now(),
+    totalContributions: 0,
+    aggregatedMetrics: {},
+    aggregatedSingleChoices: {},
+    aggregatedMultiChoices: {},
+    aggregatedTextItems: {},
+    identifiedFloraFauna: {},
+    identifiedRockTypesComposition: {},
+    identifiedBeachComposition: {},
+    discoveryQuestions: [],
+    educationalInfo: '',
+    contributedDescriptions: [_shortDescriptionController.text],
+    );
 
-        await beachDataService.addBeach(
-          initialBeach: initialBeach,
-          initialContribution: contribution,
-        );
-        _showSnackBar('Beach saved successfully!');
-      }
+    await beachDataService.addBeach(
+    initialBeach: initialBeach,
+    initialContribution: contribution,
+    );
+    _showSnackBar('Beach saved successfully!');
+    }
 
-      if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context);
     } catch (e) {
-      _showSnackBar('An error occurred: ${e.toString()}');
+    _showSnackBar('An error occurred: ${e.toString()}');
     } finally {
-      if (mounted) setState(() => _isSaving = false);
+    if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -477,7 +521,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
           .toList();
       if (names.isNotEmpty) {
         final limited = names.length > 6 ? names.sublist(0, 6) : names;
-        parts.add('Visible flora/fauna to include if natural to the scene: ${limited.join(", ")}.');
+        parts.add(
+            'Visible flora/fauna to include if natural to the scene: ${limited.join(", ")}.');
       }
     }
 
@@ -544,12 +589,20 @@ class _AddBeachScreenState extends State<AddBeachScreen>
   Widget build(BuildContext context) {
     super.build(context);
     final isNewBeach = widget.beachId == null;
-    final List<String> pageTitles = ["Details", "Flora", "Fauna", "Wood", "Composition", "Other"];
+    final List<String> pageTitles = [
+      "Details",
+      "Flora",
+      "Fauna",
+      "Wood",
+      "Composition",
+      "Other"
+    ];
 
     _appBarTitle = "Add Contribution";
     if (isNewBeach && _currentPageIndex == 0) {
-      _appBarTitle =
-      _beachNameController.text.isNotEmpty ? _beachNameController.text : "Add New Beach";
+      _appBarTitle = _beachNameController.text.isNotEmpty
+          ? _beachNameController.text
+          : "Add New Beach";
     } else if (_currentPageIndex > 0) {
       _appBarTitle = pageTitles[_currentPageIndex];
     }
@@ -583,46 +636,25 @@ class _AddBeachScreenState extends State<AddBeachScreen>
               Expanded(
                 child: PageView(
                   controller: _pageController,
-                  onPageChanged: (index) => setState(() => _currentPageIndex = index),
+                  onPageChanged: (index) =>
+                      setState(() => _currentPageIndex = index),
                   children: [
                     _buildDetailsPage(isNewBeach),
-
-                    // >>> Keep each page alive and give a PageStorageKey <<<
-                    KeepAlivePage(
-                      child: DynamicFormPage(
-                        key: const PageStorageKey('FloraPage'),
-                        fields: _floraFields,
-                        formData: _formData,
-                      ),
+                    DynamicFormPage(
+                        fields: _floraFields, formData: _formData),
+                    DynamicFormPage(
+                        fields: _faunaFields, formData: _formData),
+                    DynamicFormPage(
+                        fields: _woodFields, formData: _formData),
+                    DynamicFormPage(
+                      fields: _compositionFields,
+                      formData: _formData,
+                      widthController: _widthController,
+                      lengthController: _lengthController,
+                      bluffHeightController: _bluffHeightController,
                     ),
-                    KeepAlivePage(
-                      child: DynamicFormPage(
-                        key: const PageStorageKey('FaunaPage'),
-                        fields: _faunaFields,
-                        formData: _formData,
-                      ),
-                    ),
-                    KeepAlivePage(
-                      child: DynamicFormPage(
-                        key: const PageStorageKey('WoodPage'),
-                        fields: _woodFields,
-                        formData: _formData,
-                      ),
-                    ),
-                    KeepAlivePage(
-                      child: DynamicFormPage(
-                        key: const PageStorageKey('CompositionPage'),
-                        fields: _compositionFields,
-                        formData: _formData,
-                      ),
-                    ),
-                    KeepAlivePage(
-                      child: DynamicFormPage(
-                        key: const PageStorageKey('OtherPage'),
-                        fields: _otherFields,
-                        formData: _formData,
-                      ),
-                    ),
+                    DynamicFormPage(
+                        fields: _otherFields, formData: _formData),
                   ],
                 ),
               ),
@@ -643,7 +675,9 @@ class _AddBeachScreenState extends State<AddBeachScreen>
             controller: _beachNameController,
             focusNode: _beachNameFocusNode,
             decoration: const InputDecoration(labelText: 'Beach Name'),
-            validator: isNewBeach ? (v) => v!.isEmpty ? 'Please enter a name' : null : null,
+            validator: isNewBeach
+                ? (v) => v!.isEmpty ? 'Please enter a name' : null
+                : null,
             onSaved: (v) => _formData['Beach Name'] = v,
             readOnly: !isNewBeach,
           ),
@@ -651,8 +685,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
           TextFormField(
             controller: _shortDescriptionController,
             focusNode: _descriptionFocusNode,
-            decoration:
-            const InputDecoration(labelText: 'Short Description', border: OutlineInputBorder()),
+            decoration: const InputDecoration(
+                labelText: 'Short Description', border: OutlineInputBorder()),
             maxLines: 3,
             onSaved: (v) => _formData['Short Description'] = v,
           ),
@@ -660,7 +694,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
           TextFormField(
             controller: _countryController,
             decoration: const InputDecoration(labelText: 'Country'),
-            validator: isNewBeach ? (v) => v!.isEmpty ? 'Required' : null : null,
+            validator:
+            isNewBeach ? (v) => v!.isEmpty ? 'Required' : null : null,
             onSaved: (v) => _formData['Country'] = v,
             readOnly: !isNewBeach,
           ),
@@ -668,7 +703,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
           TextFormField(
             controller: _provinceController,
             decoration: const InputDecoration(labelText: 'Province'),
-            validator: isNewBeach ? (v) => v!.isEmpty ? 'Required' : null : null,
+            validator:
+            isNewBeach ? (v) => v!.isEmpty ? 'Required' : null : null,
             onSaved: (v) => _formData['Province'] = v,
             readOnly: !isNewBeach,
           ),
@@ -676,7 +712,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
           TextFormField(
             controller: _municipalityController,
             decoration: const InputDecoration(labelText: 'Municipality'),
-            validator: isNewBeach ? (v) => v!.isEmpty ? 'Required' : null : null,
+            validator:
+            isNewBeach ? (v) => v!.isEmpty ? 'Required' : null : null,
             onSaved: (v) => _formData['Municipality'] = v,
             readOnly: !isNewBeach,
           ),
@@ -702,8 +739,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
           ElevatedButton.icon(
             onPressed: _scanForIdentifications,
             icon: const Icon(Icons.camera_alt),
-            label:
-            Text('Scan Flora/Fauna (${_scannerConfirmedIdentifications.length} confirmed)'),
+            label: Text(
+                'Scan Flora/Fauna (${_scannerConfirmedIdentifications.length} confirmed)'),
           ),
           if (_scannerConfirmedIdentifications.isNotEmpty)
             Padding(
@@ -714,8 +751,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
                 children: _scannerConfirmedIdentifications
                     .map((id) => Chip(
                   label: Text(id.commonName),
-                  onDeleted: () =>
-                      setState(() => _scannerConfirmedIdentifications.remove(id)),
+                  onDeleted: () => setState(() =>
+                      _scannerConfirmedIdentifications.remove(id)),
                 ))
                     .toList(),
               ),
@@ -737,7 +774,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
               icon: const Icon(Icons.arrow_back),
               label: Text(pageTitles[_currentPageIndex - 1]),
               onPressed: () => _pageController.previousPage(
-                  duration: const Duration(milliseconds: 300), curve: Curves.ease),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.ease),
             ),
           const Spacer(),
           if (_currentPageIndex < pageTitles.length - 1)
@@ -745,7 +783,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
               label: Text(pageTitles[_currentPageIndex + 1]),
               icon: const Icon(Icons.arrow_forward),
               onPressed: () => _pageController.nextPage(
-                  duration: const Duration(milliseconds: 300), curve: Curves.ease),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.ease),
             ),
         ],
       ),
@@ -759,8 +798,12 @@ class _AddBeachScreenState extends State<AddBeachScreen>
         title: const Text('Are you sure?'),
         content: const Text('Do you want to discard your changes?'),
         actions: <Widget>[
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('No')),
-          TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Yes')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('No')),
+          TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Yes')),
         ],
       ),
     );
@@ -768,7 +811,8 @@ class _AddBeachScreenState extends State<AddBeachScreen>
 
   void _showSnackBar(String message) {
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(message)));
     }
   }
 
@@ -779,12 +823,13 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     _countryController.dispose();
     _provinceController.dispose();
     _municipalityController.dispose();
+    _widthController.dispose();
+    _lengthController.dispose();
+    _bluffHeightController.dispose();
     _pageController.dispose();
     _descriptionFocusNode.dispose();
     _beachNameFocusNode.dispose();
     super.dispose();
-    // (Optional) If you want to force portrait on this screen, consider calling:
-    // SystemChrome.setPreferredOrientations(DeviceOrientation.values);
   }
 }
 

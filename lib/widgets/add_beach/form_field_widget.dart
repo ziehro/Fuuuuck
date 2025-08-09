@@ -7,11 +7,13 @@ import 'package:fuuuuck/util/long_press_descriptions.dart';
 class FormFieldWidget extends StatefulWidget {
   final FormFieldData field;
   final Map<String, dynamic> formData;
+  final TextEditingController? controller; // Optional controller for text/number fields
 
   const FormFieldWidget({
     super.key,
     required this.field,
     required this.formData,
+    this.controller,
   });
 
   @override
@@ -20,6 +22,52 @@ class FormFieldWidget extends StatefulWidget {
 
 class _FormFieldWidgetState extends State<FormFieldWidget> {
   final GeminiService _geminiService = GeminiService();
+  late TextEditingController _localController;
+  bool _usingProvidedController = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupController();
+  }
+
+  void _setupController() {
+    if (widget.controller != null) {
+      // Use the provided controller
+      _localController = widget.controller!;
+      _usingProvidedController = true;
+
+      // Initialize the controller with existing form data if it's empty
+      if (_localController.text.isEmpty && widget.formData.containsKey(widget.field.label)) {
+        _localController.text = widget.formData[widget.field.label].toString();
+      }
+    } else {
+      // Create our own controller
+      _localController = TextEditingController(
+        text: widget.formData[widget.field.label]?.toString() ?? '',
+      );
+      _usingProvidedController = false;
+
+      // Add listener to sync with form data
+      _localController.addListener(() {
+        final value = _localController.text;
+        if (widget.field.type == InputFieldType.number) {
+          final numValue = double.tryParse(value);
+          if (numValue != null) {
+            widget.formData[widget.field.label] = numValue;
+          } else if (value.isEmpty) {
+            widget.formData.remove(widget.field.label);
+          }
+        } else if (widget.field.type == InputFieldType.text) {
+          if (value.isNotEmpty) {
+            widget.formData[widget.field.label] = value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+          } else {
+            widget.formData[widget.field.label] = [];
+          }
+        }
+      });
+    }
+  }
 
   void _showInfoDialog(String subject) {
     // Get the description from our new map, or use a default if not found.
@@ -100,8 +148,8 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: TextFormField(
+            controller: _localController,
             decoration: InputDecoration(labelText: widget.field.label, hintText: 'Enter Here, separated by commas'),
-            initialValue: widget.field.initialValue,
             onSaved: (value) {
               if (value != null && value.isNotEmpty) {
                 widget.formData[widget.field.label] = value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
@@ -115,9 +163,9 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: TextFormField(
+            controller: _localController,
             decoration: InputDecoration(labelText: widget.field.label, hintText: 'Enter Here'),
             keyboardType: TextInputType.number,
-            initialValue: widget.field.initialValue?.toString(),
             validator: (value) {
               if (value == null || value.isEmpty) return 'Please enter a number';
               if (double.tryParse(value) == null) return 'Please enter a valid number';
@@ -227,5 +275,14 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
         ),
       ],
     );
+  }
+
+  @override
+  void dispose() {
+    // Only dispose the controller if we created it ourselves
+    if (!_usingProvidedController) {
+      _localController.dispose();
+    }
+    super.dispose();
   }
 }
