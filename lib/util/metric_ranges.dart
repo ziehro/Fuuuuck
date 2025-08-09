@@ -45,4 +45,6 @@ const Map<String, MetricRange> metricRanges = {
   'Bluffs Grade': MetricRange(1, 9),
   'Garbage': MetricRange(1, 9),
   'People': MetricRange(0, 5),
+  'Width':  MetricRange(0, 300),   // adjust if you use different units
+  'Length': MetricRange(0, 2000),  // adjust as needed
 };

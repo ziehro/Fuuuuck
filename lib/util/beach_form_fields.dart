@@ -58,7 +58,7 @@ final List<FormFieldData> beachFormFields = [
   FormFieldData(label: 'Garbage', type: InputFieldType.slider, minValue: 1, maxValue: 9),
   FormFieldData(label: 'People', type: InputFieldType.slider, minValue: 0, maxValue: 5),
   FormFieldData(label: 'Best Tide', type: InputFieldType.singleChoice, options: ['Low', 'Mid', 'High', "Don't Matter"]),
-  FormFieldData(label: 'Parking', type: InputFieldType.singleChoice, options: ['Parked on the beach', '1 minute', '5 minutes', '10 minutes', '30 minutes', '1 hour plus', 'Boat access only']),
+  FormFieldData(label: 'Parking Distance', type: InputFieldType.singleChoice, options: ['Parked on the beach', '1 minute', '5 minutes', '10 minutes', '30 minutes', '1 hour plus', 'Boat access only']),
   FormFieldData(label: 'Treasure', type: InputFieldType.text),
   FormFieldData(label: 'New Items', type: InputFieldType.text),
   FormFieldData(label: 'Man Made', type: InputFieldType.multiChoice, options: ['Seawall', 'Sewar Line', 'Walkway', 'Garbage Cans', 'Tents', 'Picnic Tables', 'Benches', 'Houses', 'Playground', 'Bathrooms', 'Campground', 'Protective Structure To Escape the Weather', 'Boat Dock', 'Boat Launch']),

@@ -383,12 +383,13 @@ class BeachDetailScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Explicitly handle Width and Length at the top for visibility
-          if (beach.aggregatedMetrics.containsKey('Width'))
-            _buildDataRow(context, 'Width', Text('${beach.aggregatedMetrics['Width']!.toStringAsFixed(0)} steps', textAlign: TextAlign.end)),
-          if (beach.aggregatedMetrics.containsKey('Length'))
-            _buildDataRow(context, 'Length', Text('${beach.aggregatedMetrics['Length']!.toStringAsFixed(0)} steps', textAlign: TextAlign.end)),
-
+          // Explicit header for Length & Width
+          if (beach.aggregatedMetrics.containsKey('Width') || beach.aggregatedMetrics.containsKey('Length'))
+            _CompositionSizeHeader(
+              width:  beach.aggregatedMetrics['Width'],
+              length: beach.aggregatedMetrics['Length'],
+              unitLabel: 'steps', // keep your unit; change to 'm' if you switch
+            ),
           // Handle the rest of the metrics using the generic builder
           _buildMetricsCategoryTab(context, beach, remainingCompositionKeys, isComposition: true),
 
@@ -723,5 +724,64 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   @override
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
     return false;
+  }
+
+
+}
+class _CompositionSizeHeader extends StatelessWidget {
+  final double? length;
+  final double? width;
+  final String unitLabel;
+
+  const _CompositionSizeHeader({
+    required this.length,
+    required this.width,
+    this.unitLabel = 'steps',
+  });
+
+  String _fmt(double? v) {
+    if (v == null) return '';
+    // no decimals for steps
+    return '${v.toStringAsFixed(0)} $unitLabel';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <Widget>[];
+    if (length != null) {
+      chips.add(_Chipish(label: 'Length', value: _fmt(length)));
+    }
+    if (width != null) {
+      chips.add(_Chipish(label: 'Width', value: _fmt(width)));
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: chips,
+      ),
+    );
+  }
+}
+
+class _Chipish extends StatelessWidget {
+  final String label;
+  final String value;
+  const _Chipish({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text('$label: $value', style: theme.textTheme.bodyMedium),
+    );
   }
 }
