@@ -9,6 +9,8 @@ import 'package:fuuuuck/auth/register_page.dart';
 // Placeholder imports for your screens (ensure these paths are correct)
 import 'package:fuuuuck/screens/scanner_screen.dart';
 import 'package:fuuuuck/screens/map_screen.dart';
+import 'package:fuuuuck/screens/add_beach_screen.dart';
+import 'package:fuuuuck/screens/settings_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -71,12 +73,21 @@ class MyAppContent extends StatefulWidget {
 class _MyAppContentState extends State<MyAppContent> {
   int _selectedIndex = 0; // Index for the currently selected tab
 
+  // Global key to access MapScreen state
+  final GlobalKey<MapScreenState> _mapScreenKey = GlobalKey<MapScreenState>();
+
   // List of widgets for each tab
   // Make sure the order here matches the BottomNavigationBarItem order
-  static final List<Widget> _widgetOptions = <Widget>[
-    const MapScreen(),     // MAP is now the first tab
-    const ScannerScreen(), // Scanner is the second tab
-  ];
+  late final List<Widget> _widgetOptions;
+
+  @override
+  void initState() {
+    super.initState();
+    _widgetOptions = <Widget>[
+      MapScreen(key: _mapScreenKey),     // MAP is now the first tab
+      const ScannerScreen(), // Scanner is the second tab
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -84,31 +95,129 @@ class _MyAppContentState extends State<MyAppContent> {
     });
   }
 
+  // Get the app bar title based on selected tab
+  String _getAppBarTitle() {
+    switch (_selectedIndex) {
+      case 0:
+        return 'Beaches';
+      case 1:
+        return 'Scanner';
+      default:
+        return 'Beach Book';
+    }
+  }
+
+  // Show confirmation dialog before signing out
+  Future<void> _showSignOutConfirmation() async {
+    final bool? shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sign Out'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSignOut == true) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.signOut();
+      // No need to navigate manually, AuthGate will automatically redirect
+    }
+  }
+
+  // Get the app bar actions based on selected tab
+  List<Widget> _getAppBarActions() {
+    List<Widget> actions = [];
+
+    // Map-specific actions
+    if (_selectedIndex == 0) {
+      // Toggle markers on/off
+      actions.add(
+        IconButton(
+          tooltip: 'Toggle markers',
+          icon: const Icon(Icons.location_pin),
+          onPressed: () {
+            _mapScreenKey.currentState?.toggleMarkers();
+          },
+        ),
+      );
+
+      // Layers menu (pick a metric from the bar)
+      actions.add(
+        PopupMenuButton<String?>(
+          tooltip: 'Heatmap layer',
+          icon: const Icon(Icons.layers),
+          onSelected: (val) {
+            _mapScreenKey.currentState?.setActiveMetric(val);
+          },
+          itemBuilder: (context) {
+            final keys = MapScreen.getMetricKeys().toList()
+              ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+            return <PopupMenuEntry<String?>>[
+              const PopupMenuItem<String?>(
+                value: null,
+                child: Text('None'),
+              ),
+              const PopupMenuDivider(),
+              ...keys.map((k) => PopupMenuItem<String?>(
+                value: k,
+                child: Text(k),
+              )),
+            ];
+          },
+        ),
+      );
+
+      // Clear heatmap
+      actions.add(
+        IconButton(
+          tooltip: 'Clear heatmap',
+          icon: const Icon(Icons.layers_clear),
+          onPressed: () {
+            _mapScreenKey.currentState?.clearHeatmap();
+          },
+        ),
+      );
+    }
+
+    // Common actions for all tabs
+    actions.addAll([
+      IconButton(
+        icon: const Icon(Icons.settings),
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const SettingsScreen()),
+          );
+        },
+      ),
+      IconButton(
+        icon: const Icon(Icons.logout),
+        onPressed: _showSignOutConfirmation, // Now calls confirmation dialog
+        tooltip: 'Sign Out',
+      ),
+    ]);
+
+    return actions;
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Access AuthService to get current user info or sign out
-    final authService = Provider.of<AuthService>(context, listen: false);
-
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Beach Book'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings),
-            onPressed: () {
-              // TODO: Navigate to settings screen
-              print('Settings button pressed');
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authService.signOut();
-              // No need to navigate manually, AuthGate will automatically redirect
-            },
-            tooltip: 'Sign Out',
-          ),
-        ],
+        title: Text(_getAppBarTitle()),
+        actions: _getAppBarActions(),
       ),
       body: Center(
         child: _widgetOptions.elementAt(_selectedIndex),
@@ -127,8 +236,19 @@ class _MyAppContentState extends State<MyAppContent> {
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      // The FloatingActionButton for "Add New Beach" is now in MapScreen.dart,
-      // so it's removed from here to avoid duplication.
+      // Show FAB only on Map tab
+      floatingActionButton: _selectedIndex == 0
+          ? FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddBeachScreen())
+          );
+        },
+        tooltip: 'Add New Beach',
+        child: const Icon(Icons.add_location_alt),
+      )
+          : null,
     );
   }
 }

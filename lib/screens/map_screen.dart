@@ -17,10 +17,25 @@ class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
   @override
-  State<MapScreen> createState() => _MapScreenState();
+  State<MapScreen> createState() => MapScreenState();
+
+  // Static method to get metric keys for the AppBar menu
+  static Set<String> getMetricKeys() => _metricKeys;
+
+  // Metric keys to offer as layers
+  static const Set<String> _metricKeys = {
+    // Composition
+    'Sand','Pebbles','Rocks','Boulders','Stone','Mud','Coal','Midden',
+    // Flora
+    'Kelp Beach','Seaweed Beach','Seaweed Rocks',
+    // Driftwood
+    'Kindling','Firewood','Logs','Trees',
+    // Fauna
+    'Anemones','Barnacles','Bugs','Clams','Limpets','Mussels','Oysters','Snails','Turtles',
+  };
 }
 
-class _MapScreenState extends State<MapScreen> {
+class MapScreenState extends State<MapScreen> {
   GoogleMapController? _mapController;
   LatLng? _currentPosition;
   Stream<List<Beach>>? _beachesStream;
@@ -34,8 +49,29 @@ class _MapScreenState extends State<MapScreen> {
   String? _activeMetricKey; // null => no layer
   bool _showMarkers = true;
 
-  // Circle “heatmap”
+  // Circle "heatmap"
   final Set<Circle> _heatCircles = {};
+
+  // Public methods that can be called from AppBar
+  void toggleMarkers() {
+    setState(() {
+      _showMarkers = !_showMarkers;
+    });
+  }
+
+  void setActiveMetric(String? key) {
+    setState(() {
+      _activeMetricKey = key;
+      _heatCircles.clear(); // rebuild on next frame
+    });
+  }
+
+  void clearHeatmap() {
+    setState(() {
+      _activeMetricKey = null;
+      _heatCircles.clear();
+    });
+  }
 
   @override
   void initState() {
@@ -222,251 +258,129 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Beaches'),
-        actions: [
-          // Toggle markers on/off
-          IconButton(
-            tooltip: _showMarkers ? 'Hide markers' : 'Show markers',
-            icon: Icon(_showMarkers ? Icons.location_pin : Icons.location_off),
-            onPressed: () => setState(() => _showMarkers = !_showMarkers),
-          ),
+    return _currentPosition == null
+        ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Getting your location...'))
+        : Stack(
+      children: [
+        StreamBuilder<List<Beach>>(
+          stream: _beachesStream,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator(semanticsLabel: 'Loading beaches...'));
+            }
+            if (snapshot.hasError) {
+              return Center(child: Text('Error: ${snapshot.error}'));
+            }
 
-          // Layers menu (pick a metric from the bar)
-          PopupMenuButton<String?>(
-            tooltip: 'Heatmap layer',
-            icon: const Icon(Icons.layers),
-            onSelected: (val) {
-              setState(() {
-                _activeMetricKey = val;   // null => no layer
-                _heatCircles.clear();     // rebuild on next frame
-              });
-            },
-            itemBuilder: (context) {
-              final keys = _metricKeys.toList()
-                ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-              return <PopupMenuEntry<String?>>[
-                const PopupMenuItem<String?>(
-                  value: null,
-                  child: Text('None'),
-                ),
-                const PopupMenuDivider(),
-                ...keys.map((k) => PopupMenuItem<String?>(
-                  value: k,
-                  child: Text(k),
-                )),
-              ];
-            },
-          ),
+            final beaches = snapshot.data ?? [];
 
-          // Clear heatmap
-          if (_activeMetricKey != null)
-            IconButton(
-              tooltip: 'Clear heatmap',
-              icon: const Icon(Icons.layers_clear),
-              onPressed: () => setState(() {
-                _activeMetricKey = null;
-                _heatCircles.clear();
-              }),
-            ),
-        ],
-      ),
-      body: _currentPosition == null
-          ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Getting your location...'))
-          : Stack(
-        children: [
-          StreamBuilder<List<Beach>>(
-            stream: _beachesStream,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator(semanticsLabel: 'Loading beaches...'));
-              }
-              if (snapshot.hasError) {
-                return Center(child: Text('Error: ${snapshot.error}'));
-              }
+            // Markers
+            final markers = _showMarkers
+                ? beaches
+                .map((b) => Marker(
+              markerId: MarkerId(b.id),
+              position: LatLng(b.latitude, b.longitude),
+              onTap: () => setState(() => _selectedBeach = b),
+              infoWindow: _activeMetricKey != null && b.aggregatedMetrics[_activeMetricKey!] != null
+                  ? InfoWindow(
+                title: b.name,
+                snippet:
+                '${_activeMetricKey!}: ${b.aggregatedMetrics[_activeMetricKey!]!.toStringAsFixed(1)}',
+              )
+                  : InfoWindow(title: b.name),
+            ))
+                .toSet()
+                : <Marker>{};
 
-              final beaches = snapshot.data ?? [];
+            // Rebuild circles when data or metric changes
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              _rebuildHeatCircles(beaches);
+            });
 
-              // Markers
-              final markers = _showMarkers
-                  ? beaches
-                  .map((b) => Marker(
-                markerId: MarkerId(b.id),
-                position: LatLng(b.latitude, b.longitude),
-                onTap: () => setState(() => _selectedBeach = b),
-                infoWindow: _activeMetricKey != null && b.aggregatedMetrics[_activeMetricKey!] != null
-                    ? InfoWindow(
-                  title: b.name,
-                  snippet:
-                  '${_activeMetricKey!}: ${b.aggregatedMetrics[_activeMetricKey!]!.toStringAsFixed(1)}',
-                )
-                    : InfoWindow(title: b.name),
-              ))
-                  .toSet()
-                  : <Marker>{};
+            return GoogleMap(
+              initialCameraPosition: CameraPosition(target: _currentPosition!, zoom: 10),
+              onMapCreated: _onMapCreated,
+              onCameraMove: (pos) => _onCameraMove(pos),
+              onCameraIdle: () async {
+                if (_mapController != null) {
+                  _currentBounds = await _safeVisibleRegion(_mapController!);
+                }
+              },
+              onTap: (_) => setState(() => _selectedBeach = null),
+              markers: markers,
+              circles: _heatCircles,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
+              zoomControlsEnabled: false,
+            );
+          },
+        ),
 
-              // Rebuild circles when data or metric changes
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                _rebuildHeatCircles(beaches);
-              });
-
-              return GoogleMap(
-                initialCameraPosition: CameraPosition(target: _currentPosition!, zoom: 10),
-                onMapCreated: _onMapCreated,
-                onCameraMove: (pos) => _onCameraMove(pos),
-                onCameraIdle: () async {
-                  if (_mapController != null) {
-                    _currentBounds = await _safeVisibleRegion(_mapController!);
-                  }
-                },
-                onTap: (_) => setState(() => _selectedBeach = null),
-                markers: markers,
-                circles: _heatCircles,
-                myLocationEnabled: true,
-                myLocationButtonEnabled: true,
-                zoomControlsEnabled: false,
-              );
-            },
-          ),
-
-          // CHIP CAROUSEL: bottom-left, leaving space for the FAB on the right
+        // Legend (only when a layer is active)
+        if (_activeMetricKey != null)
           Positioned(
+            left: 16,
+            right: 88, // Leave space for FAB (56px) + margin (32px)
+            bottom: 16 + MediaQuery.of(context).padding.bottom,
+            child: _LegendBar(label: _activeMetricKey!),
+          ),
+
+        if (_selectedBeach != null)
+          Positioned(
+            bottom: 100,
+            left: 20,
+            right: 20,
+            child: GestureDetector(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => BeachDetailScreen(beachId: _selectedBeach!.id)),
+                );
+              },
+              child: Card(
+                elevation: 5,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(_selectedBeach!.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      Text(_selectedBeach!.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+        // Adaptive "Search this area"
+        if (_showSearchAreaButton)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 10,
             left: 0,
             right: 0,
-            bottom: 16 + MediaQuery.of(context).padding.bottom,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  // Chips
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 44),
-                        child: _MetricPicker(
-                          activeKey: _activeMetricKey,
-                          onSelected: (key) => setState(() => _activeMetricKey = key),
-                        ),
-                      ),
-                    ),
-                  ),
-                  // Spacer so chips don't sit under the FAB (approx FAB + margin)
-                  const SizedBox(width: 72),
-                ],
+            child: Center(
+              child: ElevatedButton.icon(
+                icon: const Icon(Icons.search),
+                label: Text('Search this area${_activeMetricKey != null ? ' • ${_activeMetricKey!}' : ''}'),
+                onPressed: _loadBeachesForVisibleRegion,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Theme.of(context).primaryColor,
+                  foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
+                ),
               ),
             ),
           ),
-
-          // Legend (only when a layer is active)
-          if (_activeMetricKey != null)
-            Positioned(
-              left: 16,
-              right: 96, // leave more room near the FAB
-              bottom: 72,
-              child: _LegendBar(label: _activeMetricKey!),
-            ),
-
-          if (_selectedBeach != null)
-            Positioned(
-              bottom: 100,
-              left: 20,
-              right: 20,
-              child: GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => BeachDetailScreen(beachId: _selectedBeach!.id)),
-                  );
-                },
-                child: Card(
-                  elevation: 5,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(_selectedBeach!.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        Text(_selectedBeach!.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-          // Adaptive “Search this area”
-          if (_showSearchAreaButton)
-            Positioned(
-              top: MediaQuery.of(context).padding.top + 10,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: ElevatedButton.icon(
-                  icon: const Icon(Icons.search),
-                  label: Text('Search this area${_activeMetricKey != null ? ' • ${_activeMetricKey!}' : ''}'),
-                  onPressed: _loadBeachesForVisibleRegion,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Theme.of(context).primaryColor,
-                    foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _navigateToAddBeachScreen,
-        tooltip: 'Add New Beach',
-        child: const Icon(Icons.add_location_alt),
-      ),
+      ],
     );
   }
 }
 
 // ---- UI helpers -------------------------------------------------------------
-
-class _MetricPicker extends StatelessWidget {
-  final String? activeKey;
-  final ValueChanged<String?> onSelected;
-
-  const _MetricPicker({required this.activeKey, required this.onSelected});
-
-  @override
-  Widget build(BuildContext context) {
-    final keys = _MapScreenState._metricKeys.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      child: Row(
-        children: [
-          FilterChip(
-            label: const Text('None'),
-            selected: activeKey == null,
-            onSelected: (_) => onSelected(null),
-          ),
-          const SizedBox(width: 8),
-          ...keys.map(
-                (k) => Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: FilterChip(
-                label: Text(k),
-                selected: activeKey == k,
-                onSelected: (_) => onSelected(k),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
 class _LegendBar extends StatelessWidget {
   final String label;
