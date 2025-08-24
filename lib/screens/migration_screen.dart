@@ -1,6 +1,7 @@
 // lib/screens/migration_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // Add this import
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:fuuuuck/services/migration_service.dart';
 
 class MigrationScreen extends StatefulWidget {
@@ -65,27 +66,9 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _isRunning = false;
       _isPaused = false;
     });
-  }
-
-  Future<void> _runTestMigrationWithWrite() async {
-    if (_isRunning) return;
-
-    setState(() {
-      _isRunning = true;
-    });
-
-    _addOutput('🧪 Starting test migration with write...');
-
-    try {
-      await _migrationService.testMigrationWithWrite(onProgress: _addOutput);
-      _addOutput('✅ Test migration with write completed!');
-    } catch (e) {
-      _addOutput('❌ Test migration with write failed: $e');
-    } finally {
-      setState(() {
-        _isRunning = false;
-      });
-    }
+    // Release wake lock when stopped
+    WakelockPlus.disable();
+    _addOutput('🔓 Screen wake lock released');
   }
 
   Future<void> _runTestMigration() async {
@@ -95,11 +78,14 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _isRunning = true;
     });
 
+    // Keep screen awake during migration
+    await WakelockPlus.enable();
+    _addOutput('🔒 Screen will stay awake during migration');
+
     _addOutput('🧪 Starting test migration...');
 
     try {
       await _migrationService.testMigration(onProgress: _addOutput);
-
       _addOutput('✅ Test migration completed!');
     } catch (e) {
       _addOutput('❌ Test migration failed: $e');
@@ -107,6 +93,94 @@ class _MigrationScreenState extends State<MigrationScreen> {
       setState(() {
         _isRunning = false;
       });
+      // Allow screen to turn off again
+      await WakelockPlus.disable();
+      _addOutput('🔓 Screen wake lock released');
+    }
+  }
+
+  Future<void> _runTestMigrationWithWrite() async {
+    if (_isRunning) return;
+
+    // Ask user what AI options to test with
+    final result = await showDialog<Map<String, bool>>(
+      context: context,
+      builder: (context) {
+        bool testAiDescription = true;
+        bool testAiImage = false;
+        return StatefulBuilder(
+          builder: (context, setState) => AlertDialog(
+            title: const Text('Test & Write Options'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Choose what to test:'),
+                const SizedBox(height: 12),
+                CheckboxListTile(
+                  title: const Text('Generate AI Description'),
+                  subtitle: const Text('~2-3 seconds, ~\$0.002'),
+                  value: testAiDescription,
+                  onChanged: (v) => setState(() => testAiDescription = v ?? true),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                CheckboxListTile(
+                  title: const Text('Generate AI Image'),
+                  subtitle: const Text('~10-15 seconds, ~\$0.040'),
+                  value: testAiImage,
+                  onChanged: (v) => setState(() => testAiImage = v ?? false),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, {
+                  'description': testAiDescription,
+                  'image': testAiImage,
+                }),
+                child: const Text('Test'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    setState(() {
+      _isRunning = true;
+    });
+
+    // Keep screen awake during migration
+    await WakelockPlus.enable();
+    _addOutput('🔒 Screen will stay awake during migration');
+
+    final aiDesc = result['description'] ?? true;
+    final aiImg = result['image'] ?? false;
+    _addOutput('🧪 Starting test with AI Description: ${aiDesc ? "✅" : "❌"}, AI Image: ${aiImg ? "✅" : "❌"}');
+
+    try {
+      await _migrationService.testMigrationWithWrite(
+        onProgress: _addOutput,
+        generateAiDescription: aiDesc,
+        generateAiImage: aiImg,
+        skipExisting: true,
+      );
+      _addOutput('✅ Test migration with write completed!');
+    } catch (e) {
+      _addOutput('❌ Test migration with write failed: $e');
+    } finally {
+      setState(() {
+        _isRunning = false;
+      });
+      // Allow screen to turn off again
+      await WakelockPlus.disable();
+      _addOutput('🔓 Screen wake lock released');
     }
   }
 
@@ -136,7 +210,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
             Text('🤖 AI Descriptions: ${_generateAiDescriptions ? "Yes" : "No"}'),
             Text('🎨 AI Images: ${_generateAiImages ? "Yes (every ${_aiImageFrequency}rd beach = $imageCount images)" : "No"}'),
             const SizedBox(height: 8),
-            Text('💰 Estimated cost: \${estimatedCost.toStringAsFixed(2)}',
+            Text('💰 Estimated cost: \$${estimatedCost.toStringAsFixed(2)}',
                 style: const TextStyle(fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
             const Text('This action cannot be undone. Are you sure?',
@@ -164,6 +238,10 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _isPaused = false;
     });
 
+    // Keep screen awake during full migration
+    await WakelockPlus.enable();
+    _addOutput('🔒 Screen will stay awake during migration');
+
     _addOutput('🚀 Starting full migration with AI generation...');
 
     try {
@@ -183,6 +261,9 @@ class _MigrationScreenState extends State<MigrationScreen> {
         _isRunning = false;
         _isPaused = false;
       });
+      // Allow screen to turn off again
+      await WakelockPlus.disable();
+      _addOutput('🔓 Screen wake lock released');
     }
   }
 
@@ -220,6 +301,10 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _isRunning = true;
     });
 
+    // Keep screen awake during migration
+    await WakelockPlus.enable();
+    _addOutput('🔒 Screen will stay awake during migration');
+
     _addOutput('🔍 Testing migration for document: $docId');
 
     try {
@@ -235,6 +320,19 @@ class _MigrationScreenState extends State<MigrationScreen> {
       setState(() {
         _isRunning = false;
       });
+      // Allow screen to turn off again
+      await WakelockPlus.disable();
+      _addOutput('🔓 Screen wake lock released');
+    }
+  }
+
+  String _getOrdinalSuffix(int number) {
+    if (number >= 11 && number <= 13) return 'th';
+    switch (number % 10) {
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
     }
   }
 
@@ -290,7 +388,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
                         CheckboxListTile(
                           title: const Text('Generate AI Images'),
-                          subtitle: Text('~\$0.040 per image (every ${_aiImageFrequency}rd beach)'),
+                          subtitle: Text('~\$0.040 per image (every ${_aiImageFrequency}${_getOrdinalSuffix(_aiImageFrequency)} beach)'),
                           value: _generateAiImages,
                           onChanged: (value) => setState(() => _generateAiImages = value ?? false),
                           contentPadding: EdgeInsets.zero,
@@ -314,7 +412,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
                                   value: _aiImageFrequency,
                                   items: [1, 2, 3, 4, 5].map((i) => DropdownMenuItem(
                                     value: i,
-                                    child: Text('${i}rd'),
+                                    child: Text('${i}${_getOrdinalSuffix(i)}'),
                                   )).toList(),
                                   onChanged: (value) => setState(() => _aiImageFrequency = value ?? 3),
                                 ),
@@ -428,7 +526,11 @@ class _MigrationScreenState extends State<MigrationScreen> {
             ),
           ),
 
-          const Divider(),
+          // Separator line
+          Container(
+            height: 1,
+            color: Colors.grey[300],
+          ),
 
           // Output Panel
           Expanded(
@@ -492,6 +594,8 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
   @override
   void dispose() {
+    // Make sure wake lock is disabled when screen is disposed
+    WakelockPlus.disable();
     _scrollController.dispose();
     super.dispose();
   }

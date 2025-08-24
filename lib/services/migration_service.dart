@@ -133,8 +133,10 @@ class MigrationService {
       }) async {
     final oldData = oldDoc.data() as Map<String, dynamic>;
 
+    // Start with the basic transformed beach
     Beach newBeach = _transformBeachData(oldDoc.id, oldData);
 
+    // Generate AI description if requested
     if (generateAiDescription) {
       _log('🤖 Generating AI description for ${newBeach.name}...', onProgress);
       try {
@@ -143,32 +145,10 @@ class MigrationService {
           userAnswers: _extractUserAnswersFromBeach(oldData),
         );
 
-        newBeach = Beach(
-          id: newBeach.id,
-          name: newBeach.name,
-          latitude: newBeach.latitude,
-          longitude: newBeach.longitude,
-          geohash: newBeach.geohash,
-          country: newBeach.country,
-          province: newBeach.province,
-          municipality: newBeach.municipality,
-          description: newBeach.description,
-          aiDescription: aiDescription,
-          imageUrls: newBeach.imageUrls,
-          contributedDescriptions: newBeach.contributedDescriptions,
-          timestamp: newBeach.timestamp,
-          lastAggregated: newBeach.lastAggregated,
-          totalContributions: newBeach.totalContributions,
-          aggregatedMetrics: newBeach.aggregatedMetrics,
-          aggregatedSingleChoices: newBeach.aggregatedSingleChoices,
-          aggregatedMultiChoices: newBeach.aggregatedMultiChoices,
-          aggregatedTextItems: newBeach.aggregatedTextItems,
-          identifiedFloraFauna: newBeach.identifiedFloraFauna,
-          identifiedRockTypesComposition: newBeach.identifiedRockTypesComposition,
-          identifiedBeachComposition: newBeach.identifiedBeachComposition,
-          discoveryQuestions: newBeach.discoveryQuestions,
-          educationalInfo: newBeach.educationalInfo,
-        );
+        // Wait for the AI description to complete and update the beach
+        _log('📝 AI description received (${aiDescription.length} chars)', onProgress);
+
+        newBeach = _createUpdatedBeach(newBeach, aiDescription: aiDescription);
 
         _log('✅ AI description generated for ${newBeach.name}', onProgress);
       } catch (e) {
@@ -176,52 +156,76 @@ class MigrationService {
       }
     }
 
+    // Generate AI image if requested
     if (generateAiImage) {
       _log('🎨 Generating AI image for ${newBeach.name}...', onProgress);
       try {
         final aiImagePrompt = _buildAiImagePrompt(newBeach, oldData);
-        final combined = await _generateAiImageForBeach(newBeach.name, aiImagePrompt);
+        _log('🖼️ Sending prompt to AI (${aiImagePrompt.length} chars)', onProgress);
 
-        final updatedImageUrls = List<String>.from(newBeach.imageUrls);
-        if (combined.isNotEmpty) {
-          updatedImageUrls.add(combined);
+        final aiImageUrl = await _generateAiImageForBeach(newBeach.name, aiImagePrompt);
+
+        if (aiImageUrl.isNotEmpty) {
+          _log('📸 AI image received: ${aiImageUrl.substring(0, aiImageUrl.length.clamp(0, 50))}...', onProgress);
+
+          // Add the AI image to the existing image URLs
+          final updatedImageUrls = List<String>.from(newBeach.imageUrls);
+          updatedImageUrls.add(aiImageUrl);
+
+          newBeach = _createUpdatedBeach(newBeach, imageUrls: updatedImageUrls);
+
+          _log('✅ AI image generated and added for ${newBeach.name}', onProgress);
+        } else {
+          _log('⚠️ AI image generation returned empty URL for ${newBeach.name}', onProgress);
         }
-
-        newBeach = Beach(
-          id: newBeach.id,
-          name: newBeach.name,
-          latitude: newBeach.latitude,
-          longitude: newBeach.longitude,
-          geohash: newBeach.geohash,
-          country: newBeach.country,
-          province: newBeach.province,
-          municipality: newBeach.municipality,
-          description: newBeach.description,
-          aiDescription: newBeach.aiDescription,
-          imageUrls: updatedImageUrls,
-          contributedDescriptions: newBeach.contributedDescriptions,
-          timestamp: newBeach.timestamp,
-          lastAggregated: newBeach.lastAggregated,
-          totalContributions: newBeach.totalContributions,
-          aggregatedMetrics: newBeach.aggregatedMetrics,
-          aggregatedSingleChoices: newBeach.aggregatedSingleChoices,
-          aggregatedMultiChoices: newBeach.aggregatedMultiChoices,
-          aggregatedTextItems: newBeach.aggregatedTextItems,
-          identifiedFloraFauna: newBeach.identifiedFloraFauna,
-          identifiedRockTypesComposition: newBeach.identifiedRockTypesComposition,
-          identifiedBeachComposition: newBeach.identifiedBeachComposition,
-          discoveryQuestions: newBeach.discoveryQuestions,
-          educationalInfo: newBeach.educationalInfo,
-        );
-
-        _log('✅ AI image generated for ${newBeach.name}', onProgress);
       } catch (e) {
         _log('⚠️ Failed to generate AI image for ${newBeach.name}: $e', onProgress);
       }
     }
 
+    // Only save to Firestore after all AI generation is complete
+    _log('💾 Saving beach data to Firestore...', onProgress);
     final DocumentReference newBeachRef = await _firestore.collection(newCollectionName).add(newBeach.toMap());
+    _log('✅ Beach saved with ID: ${newBeachRef.id}', onProgress);
+
+    // Create the contribution
+    _log('📋 Creating contribution document...', onProgress);
     await _migrateContributions(oldDoc.id, newBeachRef.id, oldData);
+    _log('✅ Contribution created', onProgress);
+  }
+
+  /// Helper method to create updated beach with new data
+  Beach _createUpdatedBeach(
+      Beach originalBeach, {
+        String? aiDescription,
+        List<String>? imageUrls,
+      }) {
+    return Beach(
+      id: originalBeach.id,
+      name: originalBeach.name,
+      latitude: originalBeach.latitude,
+      longitude: originalBeach.longitude,
+      geohash: originalBeach.geohash,
+      country: originalBeach.country,
+      province: originalBeach.province,
+      municipality: originalBeach.municipality,
+      description: originalBeach.description,
+      aiDescription: aiDescription ?? originalBeach.aiDescription,
+      imageUrls: imageUrls ?? originalBeach.imageUrls,
+      contributedDescriptions: originalBeach.contributedDescriptions,
+      timestamp: originalBeach.timestamp,
+      lastAggregated: originalBeach.lastAggregated,
+      totalContributions: originalBeach.totalContributions,
+      aggregatedMetrics: originalBeach.aggregatedMetrics,
+      aggregatedSingleChoices: originalBeach.aggregatedSingleChoices,
+      aggregatedMultiChoices: originalBeach.aggregatedMultiChoices,
+      aggregatedTextItems: originalBeach.aggregatedTextItems,
+      identifiedFloraFauna: originalBeach.identifiedFloraFauna,
+      identifiedRockTypesComposition: originalBeach.identifiedRockTypesComposition,
+      identifiedBeachComposition: originalBeach.identifiedBeachComposition,
+      discoveryQuestions: originalBeach.discoveryQuestions,
+      educationalInfo: originalBeach.educationalInfo,
+    );
   }
 
   /// Test method to check if migration would work for a single document (no write)
@@ -266,7 +270,13 @@ class MigrationService {
   }
 
   /// Test method that actually writes one document to verify the structure
-  Future<void> testMigrationWithWrite({String? specificDocId, Function(String)? onProgress}) async {
+  Future<void> testMigrationWithWrite({
+    String? specificDocId,
+    Function(String)? onProgress,
+    bool generateAiDescription = true,  // Enable AI by default for testing
+    bool generateAiImage = false,       // Keep images off for faster testing
+    bool skipExisting = true,           // Enable duplicate detection
+  }) async {
     try {
       Query query = _firestore.collection(oldCollectionName);
       DocumentSnapshot doc;
@@ -288,10 +298,21 @@ class MigrationService {
         _log('🔍 Testing migration with write for first document: ${doc.id}', onProgress);
       }
 
+      // Check for existing beach first if skipExisting is enabled
+      if (skipExisting) {
+        final existingBeach = await _findExistingBeach(doc.data() as Map<String, dynamic>);
+        if (existingBeach != null) {
+          _log('⏭️ Beach already exists: ${existingBeach.name} (ID: ${existingBeach.id})', onProgress);
+          _log('📋 You can check this existing beach in your beaches collection', onProgress);
+          return;
+        }
+      }
+
+      // Use the full migration method with AI options
       await _migrateSingleBeach(
         doc,
-        generateAiDescription: false,
-        generateAiImage: false,
+        generateAiDescription: generateAiDescription,
+        generateAiImage: generateAiImage,
         onProgress: onProgress,
       );
 
