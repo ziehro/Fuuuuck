@@ -16,19 +16,15 @@ class MigrationService {
   // Collection names
   static const String oldCollectionName = 'locations';
   static const String newCollectionName = 'beaches';
+  static const String migrationTrackingCollection = 'migration_tracking';
 
   // Migration control
   bool _isPaused = false;
   bool _shouldStop = false;
 
-  // Control methods
-  void pauseMigration() => _isPaused = true;
-  void resumeMigration() => _isPaused = false;
-  void stopMigration() => _shouldStop = true;
-  void resetMigrationState() {
-    _isPaused = false;
-    _shouldStop = false;
-  }
+  // In-memory cache of processed UUIDs for current session
+  final Set<String> _processedUuids = <String>{};
+  bool _trackingCacheLoaded = false;
 
   // Choice mappings for multi-choice fields based on your old app
   static const Map<String, List<String>> multiChoiceOptions = {
@@ -45,7 +41,125 @@ class MigrationService {
     'Shape': ['Concave', 'Convex', 'Isthmus', 'Horseshoe', 'Straight'],
   };
 
-  /// Main migration method - call this to migrate all data
+  // Control methods
+  void pauseMigration() => _isPaused = true;
+  void resumeMigration() => _isPaused = false;
+  void stopMigration() => _shouldStop = true;
+  void resetMigrationState() {
+    _isPaused = false;
+    _shouldStop = false;
+    _processedUuids.clear();
+    _trackingCacheLoaded = false;
+  }
+
+  /// Load the tracking cache once per migration session
+  Future<void> _loadTrackingCache() async {
+    if (_trackingCacheLoaded) return;
+
+    try {
+      final QuerySnapshot trackingDocs = await _firestore
+          .collection(migrationTrackingCollection)
+          .get();
+
+      for (final doc in trackingDocs.docs) {
+        _processedUuids.add(doc.id);
+      }
+
+      _trackingCacheLoaded = true;
+      print('📋 Loaded ${_processedUuids.length} processed UUIDs from tracking cache');
+    } catch (e) {
+      print('⚠️ Error loading tracking cache: $e');
+      _trackingCacheLoaded = true; // Continue anyway
+    }
+  }
+
+  /// Check if a UUID has already been processed
+  Future<bool> _isAlreadyProcessed(String uuid) async {
+    await _loadTrackingCache();
+    return _processedUuids.contains(uuid);
+  }
+
+  /// Mark a UUID as processed
+  Future<void> _markAsProcessed(String uuid, String beachName, String newBeachId) async {
+    try {
+      await _firestore.collection(migrationTrackingCollection).doc(uuid).set({
+        'originalId': uuid,
+        'newBeachId': newBeachId,
+        'beachName': beachName,
+        'processedAt': Timestamp.now(),
+        'migrationVersion': '1.0',
+      });
+
+      _processedUuids.add(uuid);
+    } catch (e) {
+      print('⚠️ Error marking UUID as processed: $e');
+    }
+  }
+
+  /// Enhanced duplicate detection with multiple strategies
+  Future<bool> _isDuplicate(String uuid, Map<String, dynamic> oldData, Function(String)? onProgress) async {
+    // Strategy 1: UUID tracking (fastest)
+    if (await _isAlreadyProcessed(uuid)) {
+      _log('🔄 UUID already processed: $uuid', onProgress);
+      return true;
+    }
+
+    // Strategy 2: Name + location proximity (for safety)
+    final existingBeach = await _findExistingBeach(oldData);
+    if (existingBeach != null) {
+      _log('📍 Found existing beach by location: ${existingBeach.name}', onProgress);
+      // Mark this UUID as processed even though we found it by location
+      await _markAsProcessed(uuid, existingBeach.name, existingBeach.id);
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Clear all migration tracking (use with caution!)
+  Future<void> clearMigrationTracking({Function(String)? onProgress}) async {
+    _log('🗑️ Clearing migration tracking data...', onProgress);
+
+    try {
+      final QuerySnapshot trackingDocs = await _firestore
+          .collection(migrationTrackingCollection)
+          .get();
+
+      final batch = _firestore.batch();
+      for (final doc in trackingDocs.docs) {
+        batch.delete(doc.reference);
+      }
+
+      await batch.commit();
+      _processedUuids.clear();
+      _trackingCacheLoaded = false;
+
+      _log('✅ Cleared ${trackingDocs.docs.length} tracking records', onProgress);
+    } catch (e) {
+      _log('❌ Error clearing tracking: $e', onProgress);
+    }
+  }
+
+  /// Get migration statistics
+  Future<Map<String, int>> getMigrationStats() async {
+    try {
+      final oldCount = (await _firestore.collection(oldCollectionName).get()).docs.length;
+      final newCount = (await _firestore.collection(newCollectionName).get()).docs.length;
+      final processedCount = (await _firestore.collection(migrationTrackingCollection).get()).docs.length;
+
+      return {
+        'totalOldBeaches': oldCount,
+        'totalNewBeaches': newCount,
+        'processedCount': processedCount,
+        'remainingCount': oldCount - processedCount,
+      };
+    } catch (e) {
+      print('Error getting migration stats: $e');
+      return {};
+    }
+  }
+
+  /// Main migration method with enhanced duplicate detection
   Future<void> migrateAllData({
     Function(String)? onProgress,
     bool generateAiDescriptions = true,
@@ -55,6 +169,7 @@ class MigrationService {
   }) async {
     try {
       resetMigrationState();
+      await _loadTrackingCache();
 
       _log('🚀 Starting migration from $oldCollectionName to $newCollectionName...', onProgress);
       _log('   AI Descriptions: ${generateAiDescriptions ? "✅" : "❌"}', onProgress);
@@ -63,6 +178,7 @@ class MigrationService {
 
       final QuerySnapshot oldBeaches = await _firestore.collection(oldCollectionName).get();
       _log('📊 Found ${oldBeaches.docs.length} beaches to migrate', onProgress);
+      _log('📋 Already processed: ${_processedUuids.length} beaches', onProgress);
 
       int successCount = 0;
       int errorCount = 0;
@@ -83,30 +199,37 @@ class MigrationService {
         if (_shouldStop) break;
 
         final doc = oldBeaches.docs[i];
+        final uuid = doc.id;
+
         try {
           if (skipExisting) {
-            final existingBeach = await _findExistingBeach(doc.data() as Map<String, dynamic>);
-            if (existingBeach != null) {
-              _log('⏭️ Skipping existing beach: ${existingBeach.name}', onProgress);
+            if (await _isDuplicate(uuid, doc.data() as Map<String, dynamic>, onProgress)) {
               skippedCount++;
               continue;
             }
           }
 
-          final shouldGenerateImage = generateAiImages && (i % aiImageFrequency == 0);
+          final shouldGenerateImage = generateAiImages && (successCount % aiImageFrequency == 0);
           if (shouldGenerateImage) aiImageCount++;
 
-          await _migrateSingleBeach(
+          final newBeachId = await _migrateSingleBeach(
             doc,
             generateAiDescription: generateAiDescriptions,
             generateAiImage: shouldGenerateImage,
             onProgress: onProgress,
           );
+
+          // Mark as processed AFTER successful migration
+          if (newBeachId != null) {
+            final beachName = (doc.data() as Map<String, dynamic>)['name'] ?? 'Unknown';
+            await _markAsProcessed(uuid, beachName, newBeachId);
+          }
+
           successCount++;
-          _log('✅ Migrated beach ${i + 1}/${oldBeaches.docs.length}: ${doc.id}', onProgress);
+          _log('✅ Migrated beach ${i + 1}/${oldBeaches.docs.length}: $uuid', onProgress);
         } catch (e) {
           errorCount++;
-          _log('❌ Error migrating beach ${doc.id}: $e', onProgress);
+          _log('❌ Error migrating beach $uuid: $e', onProgress);
         }
       }
 
@@ -124,8 +247,8 @@ class MigrationService {
     }
   }
 
-  /// Migrate a single beach document
-  Future<void> _migrateSingleBeach(
+  /// Modified _migrateSingleBeach to return the new beach ID
+  Future<String?> _migrateSingleBeach(
       DocumentSnapshot oldDoc, {
         bool generateAiDescription = true,
         bool generateAiImage = false,
@@ -145,11 +268,8 @@ class MigrationService {
           userAnswers: _extractUserAnswersFromBeach(oldData),
         );
 
-        // Wait for the AI description to complete and update the beach
         _log('📝 AI description received (${aiDescription.length} chars)', onProgress);
-
         newBeach = _createUpdatedBeach(newBeach, aiDescription: aiDescription);
-
         _log('✅ AI description generated for ${newBeach.name}', onProgress);
       } catch (e) {
         _log('⚠️ Failed to generate AI description for ${newBeach.name}: $e', onProgress);
@@ -168,12 +288,9 @@ class MigrationService {
         if (aiImageUrl.isNotEmpty) {
           _log('📸 AI image received: ${aiImageUrl.substring(0, aiImageUrl.length.clamp(0, 50))}...', onProgress);
 
-          // Add the AI image to the existing image URLs
           final updatedImageUrls = List<String>.from(newBeach.imageUrls);
           updatedImageUrls.add(aiImageUrl);
-
           newBeach = _createUpdatedBeach(newBeach, imageUrls: updatedImageUrls);
-
           _log('✅ AI image generated and added for ${newBeach.name}', onProgress);
         } else {
           _log('⚠️ AI image generation returned empty URL for ${newBeach.name}', onProgress);
@@ -183,7 +300,7 @@ class MigrationService {
       }
     }
 
-    // Only save to Firestore after all AI generation is complete
+    // Save to Firestore
     _log('💾 Saving beach data to Firestore...', onProgress);
     final DocumentReference newBeachRef = await _firestore.collection(newCollectionName).add(newBeach.toMap());
     _log('✅ Beach saved with ID: ${newBeachRef.id}', onProgress);
@@ -192,6 +309,8 @@ class MigrationService {
     _log('📋 Creating contribution document...', onProgress);
     await _migrateContributions(oldDoc.id, newBeachRef.id, oldData);
     _log('✅ Contribution created', onProgress);
+
+    return newBeachRef.id;
   }
 
   /// Helper method to create updated beach with new data
@@ -273,9 +392,9 @@ class MigrationService {
   Future<void> testMigrationWithWrite({
     String? specificDocId,
     Function(String)? onProgress,
-    bool generateAiDescription = true,  // Enable AI by default for testing
-    bool generateAiImage = false,       // Keep images off for faster testing
-    bool skipExisting = true,           // Enable duplicate detection
+    bool generateAiDescription = true,
+    bool generateAiImage = false,
+    bool skipExisting = true,
   }) async {
     try {
       Query query = _firestore.collection(oldCollectionName);
@@ -300,21 +419,25 @@ class MigrationService {
 
       // Check for existing beach first if skipExisting is enabled
       if (skipExisting) {
-        final existingBeach = await _findExistingBeach(doc.data() as Map<String, dynamic>);
-        if (existingBeach != null) {
-          _log('⏭️ Beach already exists: ${existingBeach.name} (ID: ${existingBeach.id})', onProgress);
-          _log('📋 You can check this existing beach in your beaches collection', onProgress);
+        if (await _isDuplicate(doc.id, doc.data() as Map<String, dynamic>, onProgress)) {
+          _log('⏭️ Beach already processed or exists', onProgress);
           return;
         }
       }
 
       // Use the full migration method with AI options
-      await _migrateSingleBeach(
+      final newBeachId = await _migrateSingleBeach(
         doc,
         generateAiDescription: generateAiDescription,
         generateAiImage: generateAiImage,
         onProgress: onProgress,
       );
+
+      // Mark as processed
+      if (newBeachId != null) {
+        final beachName = (doc.data() as Map<String, dynamic>)['name'] ?? 'Unknown';
+        await _markAsProcessed(doc.id, beachName, newBeachId);
+      }
 
       _log('✅ Test beach and contribution created successfully!', onProgress);
       _log('📋 You can now check your beaches collection in Firestore', onProgress);
@@ -443,6 +566,138 @@ class MigrationService {
 
     return answers;
   }
+
+  /// Find existing beach by name and location to avoid duplicates
+  Future<Beach?> _findExistingBeach(Map<String, dynamic> oldData) async {
+    final String name = _extractString(oldData, ['name']) ?? '';
+    final double latitude = _extractDouble(oldData, ['latitude']) ?? 0.0;
+    final double longitude = _extractDouble(oldData, ['longitude']) ?? 0.0;
+
+    if (name.isEmpty || latitude == 0.0 || longitude == 0.0) return null;
+
+    try {
+      final QuerySnapshot nameQuery = await _firestore
+          .collection(newCollectionName)
+          .where('name', isEqualTo: name)
+          .limit(5)
+          .get();
+
+      for (final doc in nameQuery.docs) {
+        final beach = Beach.fromFirestore(doc);
+        final distance = _calculateDistance(
+            latitude, longitude,
+            beach.latitude, beach.longitude
+        );
+        if (distance < 0.1) {
+          return beach;
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Error checking for existing beach: $e');
+      return null;
+    }
+  }
+
+  /// Generate AI image for a beach using the same approach as add_beach_screen
+  Future<String> _generateAiImageForBeach(String beachName, String prompt) async {
+    try {
+      final geminiInfo = await _geminiService.getInfoAndImage(beachName, description: prompt);
+      return geminiInfo.imageUrl;
+    } catch (e) {
+      print('Error generating AI image: $e');
+      return '';
+    }
+  }
+
+  /// Build AI image prompt similar to add_beach_screen
+  String _buildAiImagePrompt(Beach beach, Map<String, dynamic> oldData) {
+    final parts = <String>[];
+
+    final beachName = beach.name.trim();
+    final whereBits = [
+      beach.municipality.trim(),
+      beach.province.trim(),
+      beach.country.trim(),
+    ].where((s) => s.isNotEmpty).join(', ');
+
+    if (beachName.isNotEmpty) {
+      parts.add('Photorealistic coastal landscape of "$beachName".');
+    }
+    if (whereBits.isNotEmpty) {
+      parts.add('Location: $whereBits.');
+    }
+
+    final short = beach.description.trim();
+    if (short.isNotEmpty) parts.add('User notes: $short.');
+
+    String lvl(num v) {
+      if (v <= 1) return 'none';
+      if (v <= 2) return 'a little';
+      if (v <= 3) return 'some';
+      if (v <= 4) return 'moderate';
+      if (v <= 5) return 'a lot';
+      return 'abundant';
+    }
+
+    void addIfNum(String label, String pretty) {
+      final raw = beach.aggregatedMetrics[label];
+      if (raw != null && raw > 1) {
+        parts.add('$pretty: ${lvl(raw)}.');
+      }
+    }
+
+    addIfNum('Sand', 'Sand');
+    addIfNum('Pebbles', 'Pebbles');
+    addIfNum('Rocks', 'Rocks');
+    addIfNum('Baseball Rocks', 'Baseball-sized rocks');
+    addIfNum('Boulders', 'Boulders');
+    addIfNum('Stone', 'Stone');
+    addIfNum('Mud', 'Mud');
+    addIfNum('Coal', 'Coal fragments');
+    addIfNum('Midden', 'Shell midden');
+    addIfNum('Islands', 'Nearby islets');
+    addIfNum('Seaweed Beach', 'Washed-up seaweed on beach');
+    addIfNum('Seaweed Rocks', 'Seaweed on intertidal rocks');
+    addIfNum('Kelp Beach', 'Kelp on shore');
+    addIfNum('Kindling', 'Small driftwood');
+    addIfNum('Firewood', 'Driftwood');
+    addIfNum('Logs', 'Large logs');
+    addIfNum('Trees', 'Trees near shore');
+
+    void addIfText(String label, String prefix) {
+      final choices = beach.aggregatedSingleChoices[label];
+      if (choices is Map<String, dynamic> && choices.isNotEmpty) {
+        final topChoice = choices.entries.first.key;
+        parts.add('$prefix $topChoice.');
+      }
+    }
+
+    addIfText('Rock Type', 'Dominant rock type:');
+    addIfText('Shape', 'Shoreline shape:');
+
+    parts.addAll([
+      'Time of day neutral; natural colors; no people; no text or logos.',
+      'Angle: eye-level to slight wide angle; weather fair and believable.',
+      'Only include features listed above; avoid adding structures or elements not specified.',
+    ]);
+
+    return parts.join(' ');
+  }
+
+  /// Calculate distance between two points in kilometers
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371;
+    final double dLat = _toRadians(lat2 - lat1);
+    final double dLon = _toRadians(lon2 - lon1);
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) *
+            math.sin(dLon / 2) * math.sin(dLon / 2);
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  double _toRadians(double degrees) => degrees * (math.pi / 180);
 
   // Helper methods for data extraction
   String? _extractString(Map<String, dynamic> data, List<String> possibleKeys) {
@@ -584,136 +839,4 @@ class MigrationService {
     print(message);
     onProgress?.call(message);
   }
-
-  /// Generate AI image for a beach using the same approach as add_beach_screen
-  Future<String> _generateAiImageForBeach(String beachName, String prompt) async {
-    try {
-      final geminiInfo = await _geminiService.getInfoAndImage(beachName, description: prompt);
-      return geminiInfo.imageUrl;
-    } catch (e) {
-      print('Error generating AI image: $e');
-      return '';
-    }
-  }
-
-  /// Build AI image prompt similar to add_beach_screen
-  String _buildAiImagePrompt(Beach beach, Map<String, dynamic> oldData) {
-    final parts = <String>[];
-
-    final beachName = beach.name.trim();
-    final whereBits = [
-      beach.municipality.trim(),
-      beach.province.trim(),
-      beach.country.trim(),
-    ].where((s) => s.isNotEmpty).join(', ');
-
-    if (beachName.isNotEmpty) {
-      parts.add('Photorealistic coastal landscape of "$beachName".');
-    }
-    if (whereBits.isNotEmpty) {
-      parts.add('Location: $whereBits.');
-    }
-
-    final short = beach.description.trim();
-    if (short.isNotEmpty) parts.add('User notes: $short.');
-
-    String lvl(num v) {
-      if (v <= 1) return 'none';
-      if (v <= 2) return 'a little';
-      if (v <= 3) return 'some';
-      if (v <= 4) return 'moderate';
-      if (v <= 5) return 'a lot';
-      return 'abundant';
-    }
-
-    void addIfNum(String label, String pretty) {
-      final raw = beach.aggregatedMetrics[label];
-      if (raw != null && raw > 1) {
-        parts.add('$pretty: ${lvl(raw)}.');
-      }
-    }
-
-    addIfNum('Sand', 'Sand');
-    addIfNum('Pebbles', 'Pebbles');
-    addIfNum('Rocks', 'Rocks');
-    addIfNum('Baseball Rocks', 'Baseball-sized rocks');
-    addIfNum('Boulders', 'Boulders');
-    addIfNum('Stone', 'Stone');
-    addIfNum('Mud', 'Mud');
-    addIfNum('Coal', 'Coal fragments');
-    addIfNum('Midden', 'Shell midden');
-    addIfNum('Islands', 'Nearby islets');
-    addIfNum('Seaweed Beach', 'Washed-up seaweed on beach');
-    addIfNum('Seaweed Rocks', 'Seaweed on intertidal rocks');
-    addIfNum('Kelp Beach', 'Kelp on shore');
-    addIfNum('Kindling', 'Small driftwood');
-    addIfNum('Firewood', 'Driftwood');
-    addIfNum('Logs', 'Large logs');
-    addIfNum('Trees', 'Trees near shore');
-
-    void addIfText(String label, String prefix) {
-      final choices = beach.aggregatedSingleChoices[label];
-      if (choices is Map<String, dynamic> && choices.isNotEmpty) {
-        final topChoice = choices.entries.first.key;
-        parts.add('$prefix $topChoice.');
-      }
-    }
-
-    addIfText('Rock Type', 'Dominant rock type:');
-    addIfText('Shape', 'Shoreline shape:');
-
-    parts.addAll([
-      'Time of day neutral; natural colors; no people; no text or logos.',
-      'Angle: eye-level to slight wide angle; weather fair and believable.',
-      'Only include features listed above; avoid adding structures or elements not specified.',
-    ]);
-
-    return parts.join(' ');
-  }
-
-  /// Find existing beach by name and location to avoid duplicates
-  Future<Beach?> _findExistingBeach(Map<String, dynamic> oldData) async {
-    final String name = _extractString(oldData, ['name']) ?? '';
-    final double latitude = _extractDouble(oldData, ['latitude']) ?? 0.0;
-    final double longitude = _extractDouble(oldData, ['longitude']) ?? 0.0;
-
-    if (name.isEmpty || latitude == 0.0 || longitude == 0.0) return null;
-
-    try {
-      final QuerySnapshot nameQuery = await _firestore
-          .collection(newCollectionName)
-          .where('name', isEqualTo: name)
-          .limit(5)
-          .get();
-
-      for (final doc in nameQuery.docs) {
-        final beach = Beach.fromFirestore(doc);
-        final distance = _calculateDistance(
-            latitude, longitude,
-            beach.latitude, beach.longitude
-        );
-        if (distance < 0.1) {
-          return beach;
-        }
-      }
-      return null;
-    } catch (e) {
-      print('Error checking for existing beach: $e');
-      return null;
-    }
-  }
-
-  /// Calculate distance between two points in kilometers
-  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-    const double earthRadius = 6371;
-    final double dLat = _toRadians(lat2 - lat1);
-    final double dLon = _toRadians(lon2 - lon1);
-    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) *
-            math.sin(dLon / 2) * math.sin(dLon / 2);
-    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadius * c;
-  }
-
-  double _toRadians(double degrees) => degrees * (math.pi / 180);
 }

@@ -1,6 +1,5 @@
 // lib/screens/migration_screen.dart
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:fuuuuck/services/migration_service.dart';
 
@@ -13,10 +12,14 @@ class MigrationScreen extends StatefulWidget {
 
 class _MigrationScreenState extends State<MigrationScreen> {
   final MigrationService _migrationService = MigrationService();
+  final ScrollController _scrollController = ScrollController();
+
+  // Run state
   bool _isRunning = false;
   bool _isPaused = false;
+
+  // Output panel
   String _output = '';
-  final ScrollController _scrollController = ScrollController();
 
   // AI Generation options
   bool _generateAiDescriptions = true;
@@ -24,11 +27,113 @@ class _MigrationScreenState extends State<MigrationScreen> {
   int _aiImageFrequency = 3;
   bool _skipExisting = true;
 
+  // Migration statistics
+  Map<String, int> _migrationStats = {};
+  bool _statsLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMigrationStats();
+  }
+
+  @override
+  void dispose() {
+    WakelockPlus.disable();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // ---------- Stats ----------
+
+  Future<void> _loadMigrationStats() async {
+    setState(() => _statsLoading = true);
+    try {
+      final stats = await _migrationService.getMigrationStats();
+      setState(() => _migrationStats = stats);
+    } catch (e) {
+      _addOutput('⚠️ Error loading stats: $e');
+    } finally {
+      setState(() => _statsLoading = false);
+    }
+  }
+
+  Widget _buildStatsCard() {
+    if (_statsLoading) {
+      return const Card(
+        child: Padding(
+          padding: EdgeInsets.all(16.0),
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Migration Statistics',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadMigrationStats,
+                  tooltip: 'Refresh Statistics',
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_migrationStats.isNotEmpty) ...[
+              _buildStatRow('Total Old Beaches', _migrationStats['totalOldBeaches'] ?? 0),
+              _buildStatRow('Already Processed', _migrationStats['processedCount'] ?? 0,
+                  color: Colors.green),
+              _buildStatRow('Remaining', _migrationStats['remainingCount'] ?? 0,
+                  color: Colors.orange),
+              _buildStatRow('New Beaches Created', _migrationStats['totalNewBeaches'] ?? 0,
+                  color: Colors.blue),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: (_migrationStats['totalOldBeaches'] ?? 0) > 0
+                    ? (_migrationStats['processedCount'] ?? 0) /
+                    (_migrationStats['totalOldBeaches']!.clamp(1, 1 << 30))
+                    : 0,
+                backgroundColor: Colors.grey[300],
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
+              ),
+            ] else
+              const Text('No statistics available', style: TextStyle(color: Colors.grey)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatRow(String label, int value, {Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label),
+          Text(
+            value.toString(),
+            style: TextStyle(fontWeight: FontWeight.bold, color: color),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---------- Helpers ----------
+
   void _addOutput(String text) {
     setState(() {
       _output += '$text\n';
     });
-    // Auto-scroll to bottom
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -41,9 +146,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
   }
 
   void _clearOutput() {
-    setState(() {
-      _output = '';
-    });
+    setState(() => _output = '');
   }
 
   void _pauseResumeMigration() {
@@ -54,9 +157,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _migrationService.pauseMigration();
       _addOutput('⏸️ Migration paused');
     }
-    setState(() {
-      _isPaused = !_isPaused;
-    });
+    setState(() => _isPaused = !_isPaused);
   }
 
   void _stopMigration() {
@@ -66,22 +167,64 @@ class _MigrationScreenState extends State<MigrationScreen> {
       _isRunning = false;
       _isPaused = false;
     });
-    // Release wake lock when stopped
     WakelockPlus.disable();
     _addOutput('🔓 Screen wake lock released');
+  }
+
+  String _getOrdinalSuffix(int number) {
+    if (number >= 11 && number <= 13) return 'th';
+    switch (number % 10) {
+      case 1:
+        return 'st';
+      case 2:
+        return 'nd';
+      case 3:
+        return 'rd';
+      default:
+        return 'th';
+    }
+  }
+
+  // ---------- Actions ----------
+
+  Future<void> _clearTrackingData() async {
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Tracking Data'),
+        content: const Text(
+          'This will clear all migration tracking data, allowing beaches to be migrated again. '
+              'This is useful if you want to start fresh or if there were errors.\n\n'
+              'Are you sure you want to continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Clear'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      setState(() => _isRunning = true);
+      await _migrationService.clearMigrationTracking(onProgress: _addOutput);
+      await _loadMigrationStats();
+      setState(() => _isRunning = false);
+    }
   }
 
   Future<void> _runTestMigration() async {
     if (_isRunning) return;
 
-    setState(() {
-      _isRunning = true;
-    });
-
-    // Keep screen awake during migration
+    setState(() => _isRunning = true);
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
-
     _addOutput('🧪 Starting test migration...');
 
     try {
@@ -90,10 +233,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
     } catch (e) {
       _addOutput('❌ Test migration failed: $e');
     } finally {
-      setState(() {
-        _isRunning = false;
-      });
-      // Allow screen to turn off again
+      setState(() => _isRunning = false);
       await WakelockPlus.disable();
       _addOutput('🔓 Screen wake lock released');
     }
@@ -102,14 +242,13 @@ class _MigrationScreenState extends State<MigrationScreen> {
   Future<void> _runTestMigrationWithWrite() async {
     if (_isRunning) return;
 
-    // Ask user what AI options to test with
     final result = await showDialog<Map<String, bool>>(
       context: context,
       builder: (context) {
         bool testAiDescription = true;
         bool testAiImage = false;
         return StatefulBuilder(
-          builder: (context, setState) => AlertDialog(
+          builder: (context, setDialogState) => AlertDialog(
             title: const Text('Test & Write Options'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -120,14 +259,14 @@ class _MigrationScreenState extends State<MigrationScreen> {
                   title: const Text('Generate AI Description'),
                   subtitle: const Text('~2-3 seconds, ~\$0.002'),
                   value: testAiDescription,
-                  onChanged: (v) => setState(() => testAiDescription = v ?? true),
+                  onChanged: (v) => setDialogState(() => testAiDescription = v ?? true),
                   contentPadding: EdgeInsets.zero,
                 ),
                 CheckboxListTile(
                   title: const Text('Generate AI Image'),
                   subtitle: const Text('~10-15 seconds, ~\$0.040'),
                   value: testAiImage,
-                  onChanged: (v) => setState(() => testAiImage = v ?? false),
+                  onChanged: (v) => setDialogState(() => testAiImage = v ?? false),
                   contentPadding: EdgeInsets.zero,
                 ),
               ],
@@ -152,17 +291,14 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
     if (result == null) return;
 
-    setState(() {
-      _isRunning = true;
-    });
-
-    // Keep screen awake during migration
+    setState(() => _isRunning = true);
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
 
     final aiDesc = result['description'] ?? true;
     final aiImg = result['image'] ?? false;
-    _addOutput('🧪 Starting test with AI Description: ${aiDesc ? "✅" : "❌"}, AI Image: ${aiImg ? "✅" : "❌"}');
+    _addOutput(
+        '🧪 Starting test with AI Description: ${aiDesc ? "✅" : "❌"}, AI Image: ${aiImg ? "✅" : "❌"}');
 
     try {
       await _migrationService.testMigrationWithWrite(
@@ -172,96 +308,11 @@ class _MigrationScreenState extends State<MigrationScreen> {
         skipExisting: true,
       );
       _addOutput('✅ Test migration with write completed!');
+      await _loadMigrationStats();
     } catch (e) {
       _addOutput('❌ Test migration with write failed: $e');
     } finally {
-      setState(() {
-        _isRunning = false;
-      });
-      // Allow screen to turn off again
-      await WakelockPlus.disable();
-      _addOutput('🔓 Screen wake lock released');
-    }
-  }
-
-  Future<void> _runFullMigration() async {
-    if (_isRunning) return;
-
-    // Calculate estimated cost
-    final QuerySnapshot oldBeaches = await FirebaseFirestore.instance
-        .collection('locations')
-        .get();
-    final beachCount = oldBeaches.docs.length;
-    final imageCount = _generateAiImages ? (beachCount / _aiImageFrequency).ceil() : 0;
-    final estimatedCost = (beachCount * 0.002) + (imageCount * 0.040);
-
-    // Show confirmation dialog with cost estimate
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Confirm Migration'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('This will migrate ALL data from the old collection to beaches.'),
-            const SizedBox(height: 12),
-            Text('📊 Beaches to migrate: $beachCount'),
-            Text('🤖 AI Descriptions: ${_generateAiDescriptions ? "Yes" : "No"}'),
-            Text('🎨 AI Images: ${_generateAiImages ? "Yes (every ${_aiImageFrequency}rd beach = $imageCount images)" : "No"}'),
-            const SizedBox(height: 8),
-            Text('💰 Estimated cost: \$${estimatedCost.toStringAsFixed(2)}',
-                style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 12),
-            const Text('This action cannot be undone. Are you sure?',
-                style: TextStyle(color: Colors.red)),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Migrate'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() {
-      _isRunning = true;
-      _isPaused = false;
-    });
-
-    // Keep screen awake during full migration
-    await WakelockPlus.enable();
-    _addOutput('🔒 Screen will stay awake during migration');
-
-    _addOutput('🚀 Starting full migration with AI generation...');
-
-    try {
-      await _migrationService.migrateAllData(
-        onProgress: _addOutput,
-        generateAiDescriptions: _generateAiDescriptions,
-        generateAiImages: _generateAiImages,
-        aiImageFrequency: _aiImageFrequency,
-        skipExisting: _skipExisting,
-      );
-
-      _addOutput('🎉 Full migration completed!');
-    } catch (e) {
-      _addOutput('💥 Migration failed: $e');
-    } finally {
-      setState(() {
-        _isRunning = false;
-        _isPaused = false;
-      });
-      // Allow screen to turn off again
+      setState(() => _isRunning = false);
       await WakelockPlus.disable();
       _addOutput('🔓 Screen wake lock released');
     }
@@ -297,14 +348,9 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
     if (docId == null || docId.isEmpty) return;
 
-    setState(() {
-      _isRunning = true;
-    });
-
-    // Keep screen awake during migration
+    setState(() => _isRunning = true);
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
-
     _addOutput('🔍 Testing migration for document: $docId');
 
     try {
@@ -312,29 +358,102 @@ class _MigrationScreenState extends State<MigrationScreen> {
         specificDocId: docId,
         onProgress: _addOutput,
       );
-
       _addOutput('✅ Test completed for document: $docId');
     } catch (e) {
       _addOutput('❌ Test failed for document $docId: $e');
     } finally {
-      setState(() {
-        _isRunning = false;
-      });
-      // Allow screen to turn off again
+      setState(() => _isRunning = false);
       await WakelockPlus.disable();
       _addOutput('🔓 Screen wake lock released');
     }
   }
 
-  String _getOrdinalSuffix(int number) {
-    if (number >= 11 && number <= 13) return 'th';
-    switch (number % 10) {
-      case 1: return 'st';
-      case 2: return 'nd';
-      case 3: return 'rd';
-      default: return 'th';
+  Future<void> _runFullMigration() async {
+    if (_isRunning) return;
+
+    final totalBeaches = _migrationStats['totalOldBeaches'] ?? 0;
+    final remaining = _migrationStats['remainingCount'] ?? totalBeaches;
+    final imageCount = _generateAiImages ? (remaining / _aiImageFrequency).ceil() : 0;
+    final estimatedCost = (remaining * 0.002) + (imageCount * 0.040);
+
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Migration'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('This will migrate remaining data from the old collection to beaches.'),
+            const SizedBox(height: 12),
+            Text('📊 Total beaches: $totalBeaches'),
+            Text('✅ Already processed: ${_migrationStats['processedCount'] ?? 0}'),
+            Text('🔄 Remaining: $remaining'),
+            Text('🤖 AI Descriptions: ${_generateAiDescriptions ? "Yes" : "No"}'),
+            Text(
+              '🎨 AI Images: ${_generateAiImages ? "Yes (every ${_aiImageFrequency}${_getOrdinalSuffix(_aiImageFrequency)} beach = $imageCount images)" : "No"}',
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '💰 Estimated cost: \$${estimatedCost.toStringAsFixed(2)}',
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'This action will only process beaches not already migrated.',
+              style: TextStyle(color: Colors.green),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Migrate'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isRunning = true;
+      _isPaused = false;
+    });
+
+    await WakelockPlus.enable();
+    _addOutput('🔒 Screen will stay awake during migration');
+    _addOutput('🚀 Starting migration with UUID tracking...');
+
+    try {
+      await _migrationService.migrateAllData(
+        onProgress: _addOutput,
+        generateAiDescriptions: _generateAiDescriptions,
+        generateAiImages: _generateAiImages,
+        aiImageFrequency: _aiImageFrequency,
+        skipExisting: _skipExisting,
+      );
+
+      _addOutput('🎉 Migration completed!');
+      await _loadMigrationStats();
+    } catch (e) {
+      _addOutput('💥 Migration failed: $e');
+    } finally {
+      setState(() {
+        _isRunning = false;
+        _isPaused = false;
+      });
+      await WakelockPlus.disable();
+      _addOutput('🔓 Screen wake lock released');
     }
   }
+
+  // ---------- UI ----------
 
   @override
   Widget build(BuildContext context) {
@@ -349,254 +468,290 @@ class _MigrationScreenState extends State<MigrationScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Control Panel
-          Container(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'BeachBook Data Migration',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'This tool will migrate data from your old Android app to the new Flutter app format.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 16),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Top: scrollable content section
+            Expanded(
+              flex: 2,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Statistics
+                    _buildStatsCard(),
+                    const SizedBox(height: 16),
 
-                // AI Generation Options
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('AI Generation Options', style: TextStyle(fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
+                    // Header
+                    const Text(
+                      'BeachBook Data Migration',
+                      style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'This tool migrates data with UUID tracking to prevent duplicates.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
 
-                        CheckboxListTile(
-                          title: const Text('Generate AI Descriptions'),
-                          subtitle: const Text('~\$0.002 per beach'),
-                          value: _generateAiDescriptions,
-                          onChanged: (value) => setState(() => _generateAiDescriptions = value ?? true),
-                          contentPadding: EdgeInsets.zero,
-                        ),
+                    // AI Generation Options
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('AI Generation Options',
+                                style: TextStyle(fontWeight: FontWeight.bold)),
+                            const SizedBox(height: 8),
 
-                        CheckboxListTile(
-                          title: const Text('Generate AI Images'),
-                          subtitle: Text('~\$0.040 per image (every ${_aiImageFrequency}${_getOrdinalSuffix(_aiImageFrequency)} beach)'),
-                          value: _generateAiImages,
-                          onChanged: (value) => setState(() => _generateAiImages = value ?? false),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-
-                        CheckboxListTile(
-                          title: const Text('Skip Existing Beaches'),
-                          subtitle: const Text('Avoid duplicates on multiple passes'),
-                          value: _skipExisting,
-                          onChanged: (value) => setState(() => _skipExisting = value ?? true),
-                          contentPadding: EdgeInsets.zero,
-                        ),
-
-                        if (_generateAiImages)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 16.0),
-                            child: Row(
-                              children: [
-                                const Text('Image frequency: Every '),
-                                DropdownButton<int>(
-                                  value: _aiImageFrequency,
-                                  items: [1, 2, 3, 4, 5].map((i) => DropdownMenuItem(
-                                    value: i,
-                                    child: Text('${i}${_getOrdinalSuffix(i)}'),
-                                  )).toList(),
-                                  onChanged: (value) => setState(() => _aiImageFrequency = value ?? 3),
-                                ),
-                                const Text(' beach'),
-                              ],
+                            CheckboxListTile(
+                              title: const Text('Generate AI Descriptions'),
+                              subtitle: const Text('~\$0.002 per beach'),
+                              value: _generateAiDescriptions,
+                              onChanged: (value) =>
+                                  setState(() => _generateAiDescriptions = value ?? true),
+                              contentPadding: EdgeInsets.zero,
                             ),
+
+                            CheckboxListTile(
+                              title: const Text('Generate AI Images'),
+                              subtitle: Text(
+                                  '~\$0.040 per image (every ${_aiImageFrequency}${_getOrdinalSuffix(_aiImageFrequency)} beach)'),
+                              value: _generateAiImages,
+                              onChanged: (value) =>
+                                  setState(() => _generateAiImages = value ?? false),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+
+                            CheckboxListTile(
+                              title: const Text('Skip Existing Beaches'),
+                              subtitle:
+                              const Text('Use UUID tracking to avoid duplicates'),
+                              value: _skipExisting,
+                              onChanged: (value) =>
+                                  setState(() => _skipExisting = value ?? true),
+                              contentPadding: EdgeInsets.zero,
+                            ),
+
+                            if (_generateAiImages)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 16.0),
+                                child: Row(
+                                  children: [
+                                    const Text('Image frequency: Every '),
+                                    DropdownButton<int>(
+                                      value: _aiImageFrequency,
+                                      items: [1, 2, 3, 4, 5]
+                                          .map(
+                                            (i) => DropdownMenuItem(
+                                          value: i,
+                                          child: Text('$i${_getOrdinalSuffix(i)}'),
+                                        ),
+                                      )
+                                          .toList(),
+                                      onChanged: (value) => setState(
+                                              () => _aiImageFrequency = value ?? 3),
+                                    ),
+                                    const Text(' beach'),
+                                  ],
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Test Controls
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isRunning ? null : _runTestMigration,
+                            icon: _isRunning
+                                ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                                : const Icon(Icons.science),
+                            label: const Text('Test Only'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isRunning ? null : _runTestMigrationWithWrite,
+                            icon: const Icon(Icons.create),
+                            label: const Text('Test & Write'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isRunning ? null : _testSpecificDoc,
+                            icon: const Icon(Icons.search),
+                            label: const Text('Test Specific'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Main Migration Controls
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isRunning ? null : _runFullMigration,
+                            icon: _isRunning
+                                ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                                : const Icon(Icons.rocket_launch),
+                            label: const Text('Run Migration'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _isRunning ? null : _clearTrackingData,
+                            icon: const Icon(Icons.delete_sweep),
+                            label: const Text('Clear Tracking'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // Pause/Stop controls (only show when migration is running)
+                    if (_isRunning) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _pauseResumeMigration,
+                              icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
+                              label: Text(_isPaused ? 'Resume' : 'Pause'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.orange,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _stopMigration,
+                              icon: const Icon(Icons.stop),
+                              label: const Text('Stop'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.grey,
+                                foregroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // Extra bottom padding for scrolling
+                    const SizedBox(height: 32),
+                  ],
+                ),
+              ),
+            ),
+
+            // Separator line
+            Container(height: 1, color: Colors.grey[300]),
+
+            // Bottom: Output panel (fixed height via Expanded)
+            Expanded(
+              flex: 1,
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Output',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        const Spacer(),
+                        if (_output.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: _clearOutput,
+                            icon: const Icon(Icons.clear, size: 16),
+                            label: const Text('Clear'),
                           ),
                       ],
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
+                    const SizedBox(height: 8),
                     Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isRunning ? null : _runTestMigration,
-                        icon: _isRunning
-                            ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.black87,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: _output.isEmpty
+                            ? const Center(
+                          child: Text(
+                            'Output will appear here...',
+                            style: TextStyle(color: Colors.grey),
+                          ),
                         )
-                            : const Icon(Icons.science),
-                        label: const Text('Test Only'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isRunning ? null : _runTestMigrationWithWrite,
-                        icon: const Icon(Icons.create),
-                        label: const Text('Test & Write'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          foregroundColor: Colors.white,
+                            : SingleChildScrollView(
+                          controller: _scrollController,
+                          child: Text(
+                            _output,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontFamily: 'monospace',
+                              fontSize: 12,
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: _isRunning ? null : _testSpecificDoc,
-                        icon: const Icon(Icons.search),
-                        label: const Text('Test Specific'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          foregroundColor: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ElevatedButton.icon(
-                  onPressed: _isRunning ? null : _runFullMigration,
-                  icon: _isRunning
-                      ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                      : const Icon(Icons.rocket_launch),
-                  label: const Text('Run Full Migration'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                ),
-
-                // Pause/Stop controls (only show when migration is running)
-                if (_isRunning) ...[
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _pauseResumeMigration,
-                          icon: Icon(_isPaused ? Icons.play_arrow : Icons.pause),
-                          label: Text(_isPaused ? 'Resume' : 'Pause'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.orange,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: _stopMigration,
-                          icon: const Icon(Icons.stop),
-                          label: const Text('Stop'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.grey,
-                            foregroundColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ],
-            ),
-          ),
-
-          // Separator line
-          Container(
-            height: 1,
-            color: Colors.grey[300],
-          ),
-
-          // Output Panel
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      const Text(
-                        'Output',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                      ),
-                      const Spacer(),
-                      if (_output.isNotEmpty)
-                        TextButton.icon(
-                          onPressed: _clearOutput,
-                          icon: const Icon(Icons.clear, size: 16),
-                          label: const Text('Clear'),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.black87,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: _output.isEmpty
-                          ? const Center(
-                        child: Text(
-                          'Output will appear here...',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      )
-                          : SingleChildScrollView(
-                        controller: _scrollController,
-                        child: Text(
-                          _output,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontFamily: 'monospace',
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    // Make sure wake lock is disabled when screen is disposed
-    WakelockPlus.disable();
-    _scrollController.dispose();
-    super.dispose();
   }
 }
