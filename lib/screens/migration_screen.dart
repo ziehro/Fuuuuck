@@ -27,6 +27,14 @@ class _MigrationScreenState extends State<MigrationScreen> {
   int _aiImageFrequency = 3;
   bool _skipExisting = true;
 
+  // Run limit
+  final TextEditingController _maxController = TextEditingController(text: '0');
+  int get _maxBeachesThisRun {
+    final parsed = int.tryParse(_maxController.text.trim());
+    return (parsed == null || parsed < 0) ? 0 : parsed;
+  }
+  int _processedThisRun = 0;
+
   // Migration statistics
   Map<String, int> _migrationStats = {};
   bool _statsLoading = false;
@@ -41,6 +49,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
   void dispose() {
     WakelockPlus.disable();
     _scrollController.dispose();
+    _maxController.dispose();
     super.dispose();
   }
 
@@ -99,7 +108,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
               LinearProgressIndicator(
                 value: (_migrationStats['totalOldBeaches'] ?? 0) > 0
                     ? (_migrationStats['processedCount'] ?? 0) /
-                    (_migrationStats['totalOldBeaches']!.clamp(1, 1 << 30))
+                    ((_migrationStats['totalOldBeaches'] ?? 1).toDouble())
                     : 0,
                 backgroundColor: Colors.grey[300],
                 valueColor: const AlwaysStoppedAnimation<Color>(Colors.green),
@@ -145,6 +154,27 @@ class _MigrationScreenState extends State<MigrationScreen> {
     });
   }
 
+  /// Enforce per-run limit based on a **single, unambiguous marker** from the service.
+  /// Emit this once per migrated beach from MigrationService:
+  ///   onProgress('[BEACH_DONE] <id or name>')
+  void _onProgressWithLimit(String text) {
+    _addOutput(text);
+
+    final limit = _maxBeachesThisRun;
+    if (limit <= 0) return; // unlimited
+
+    // Strict match: only count when the explicit token appears.
+    // (Avoids lifetime counters like "Processed 432 total" tripping the limit.)
+    final done = RegExp(r'(\[BEACH_DONE\]|\bBEACH_DONE\b|::BEACH_DONE::)').hasMatch(text);
+    if (!done) return;
+
+    _processedThisRun++;
+    if (_processedThisRun >= limit) {
+      _addOutput('⛔ Max beaches for this run reached ($limit). Stopping…');
+      _stopMigration(); // gracefully requests stop + releases wakelock
+    }
+  }
+
   void _clearOutput() {
     setState(() => _output = '');
   }
@@ -174,14 +204,10 @@ class _MigrationScreenState extends State<MigrationScreen> {
   String _getOrdinalSuffix(int number) {
     if (number >= 11 && number <= 13) return 'th';
     switch (number % 10) {
-      case 1:
-        return 'st';
-      case 2:
-        return 'nd';
-      case 3:
-        return 'rd';
-      default:
-        return 'th';
+      case 1: return 'st';
+      case 2: return 'nd';
+      case 3: return 'rd';
+      default: return 'th';
     }
   }
 
@@ -222,13 +248,16 @@ class _MigrationScreenState extends State<MigrationScreen> {
   Future<void> _runTestMigration() async {
     if (_isRunning) return;
 
-    setState(() => _isRunning = true);
+    setState(() {
+      _isRunning = true;
+      _processedThisRun = 0; // reset per-run counter
+    });
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
     _addOutput('🧪 Starting test migration...');
 
     try {
-      await _migrationService.testMigration(onProgress: _addOutput);
+      await _migrationService.testMigration(onProgress: _onProgressWithLimit);
       _addOutput('✅ Test migration completed!');
     } catch (e) {
       _addOutput('❌ Test migration failed: $e');
@@ -291,7 +320,10 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
     if (result == null) return;
 
-    setState(() => _isRunning = true);
+    setState(() {
+      _isRunning = true;
+      _processedThisRun = 0; // reset per-run counter
+    });
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
 
@@ -302,7 +334,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
     try {
       await _migrationService.testMigrationWithWrite(
-        onProgress: _addOutput,
+        onProgress: _onProgressWithLimit,
         generateAiDescription: aiDesc,
         generateAiImage: aiImg,
         skipExisting: true,
@@ -348,7 +380,10 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
     if (docId == null || docId.isEmpty) return;
 
-    setState(() => _isRunning = true);
+    setState(() {
+      _isRunning = true;
+      _processedThisRun = 0; // reset per-run counter
+    });
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
     _addOutput('🔍 Testing migration for document: $docId');
@@ -356,7 +391,7 @@ class _MigrationScreenState extends State<MigrationScreen> {
     try {
       await _migrationService.testMigration(
         specificDocId: docId,
-        onProgress: _addOutput,
+        onProgress: _onProgressWithLimit,
       );
       _addOutput('✅ Test completed for document: $docId');
     } catch (e) {
@@ -373,8 +408,13 @@ class _MigrationScreenState extends State<MigrationScreen> {
 
     final totalBeaches = _migrationStats['totalOldBeaches'] ?? 0;
     final remaining = _migrationStats['remainingCount'] ?? totalBeaches;
-    final imageCount = _generateAiImages ? (remaining / _aiImageFrequency).ceil() : 0;
-    final estimatedCost = (remaining * 0.002) + (imageCount * 0.040);
+
+    final limit = _maxBeachesThisRun;
+    final plannedThisRun = limit > 0 ? (remaining < limit ? remaining : limit) : remaining;
+
+    final imageCount =
+    _generateAiImages ? (plannedThisRun / _aiImageFrequency).ceil() : 0;
+    final estimatedCost = (plannedThisRun * 0.002) + (imageCount * 0.040);
 
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -389,13 +429,15 @@ class _MigrationScreenState extends State<MigrationScreen> {
             Text('📊 Total beaches: $totalBeaches'),
             Text('✅ Already processed: ${_migrationStats['processedCount'] ?? 0}'),
             Text('🔄 Remaining: $remaining'),
+            Text('🎯 This run will process: $plannedThisRun'
+                '${limit > 0 ? " (limited to $limit)" : ""}'),
             Text('🤖 AI Descriptions: ${_generateAiDescriptions ? "Yes" : "No"}'),
             Text(
               '🎨 AI Images: ${_generateAiImages ? "Yes (every ${_aiImageFrequency}${_getOrdinalSuffix(_aiImageFrequency)} beach = $imageCount images)" : "No"}',
             ),
             const SizedBox(height: 8),
             Text(
-              '💰 Estimated cost: \$${estimatedCost.toStringAsFixed(2)}',
+              '💰 Estimated cost this run: \$${estimatedCost.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
@@ -424,11 +466,13 @@ class _MigrationScreenState extends State<MigrationScreen> {
     setState(() {
       _isRunning = true;
       _isPaused = false;
+      _processedThisRun = 0; // reset per-run counter
     });
 
     await WakelockPlus.enable();
     _addOutput('🔒 Screen will stay awake during migration');
-    _addOutput('🚀 Starting migration with UUID tracking...');
+    _addOutput('🚀 Starting migration with UUID tracking...'
+        '${limit > 0 ? " (limit $limit)" : ""}');
 
     try {
       await _migrationService.migrateAllData(
@@ -437,9 +481,15 @@ class _MigrationScreenState extends State<MigrationScreen> {
         generateAiImages: _generateAiImages,
         aiImageFrequency: _aiImageFrequency,
         skipExisting: _skipExisting,
+        maxItems: _maxBeachesThisRun, // <-- pass the per-run cap here
       );
 
-      _addOutput('🎉 Migration completed!');
+
+      if (_processedThisRun < plannedThisRun) {
+        _addOutput('🎉 Migration completed!');
+      } else {
+        _addOutput('✅ Reached run limit of $plannedThisRun beaches.');
+      }
       await _loadMigrationStats();
     } catch (e) {
       _addOutput('💥 Migration failed: $e');
@@ -479,11 +529,9 @@ class _MigrationScreenState extends State<MigrationScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Statistics
                     _buildStatsCard(),
                     const SizedBox(height: 16),
 
-                    // Header
                     const Text(
                       'BeachBook Data Migration',
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -492,6 +540,38 @@ class _MigrationScreenState extends State<MigrationScreen> {
                     const Text(
                       'This tool migrates data with UUID tracking to prevent duplicates.',
                       style: TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Run limit control
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.filter_alt),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'Max beaches this run',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 120,
+                              child: TextField(
+                                controller: _maxController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  hintText: '0 = All',
+                                  labelText: 'Count',
+                                ),
+                                onChanged: (_) => setState(() {}), // refresh estimates
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 16),
 
@@ -651,7 +731,6 @@ class _MigrationScreenState extends State<MigrationScreen> {
                       ],
                     ),
 
-                    // Pause/Stop controls (only show when migration is running)
                     if (_isRunning) ...[
                       const SizedBox(height: 12),
                       Row(
@@ -683,7 +762,6 @@ class _MigrationScreenState extends State<MigrationScreen> {
                       ),
                     ],
 
-                    // Extra bottom padding for scrolling
                     const SizedBox(height: 32),
                   ],
                 ),

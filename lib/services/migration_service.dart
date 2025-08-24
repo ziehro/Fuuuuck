@@ -166,6 +166,7 @@ class MigrationService {
     bool generateAiImages = false,
     int aiImageFrequency = 3,
     bool skipExisting = true,
+    int maxItems = 0, // 0 = unlimited
   }) async {
     try {
       resetMigrationState();
@@ -175,6 +176,11 @@ class MigrationService {
       _log('   AI Descriptions: ${generateAiDescriptions ? "✅" : "❌"}', onProgress);
       _log('   AI Images: ${generateAiImages ? "✅ (every ${aiImageFrequency}rd beach)" : "❌"}', onProgress);
       _log('   Skip Existing: ${skipExisting ? "✅" : "❌"}', onProgress);
+      if (maxItems > 0) {
+        _log('   Max this run: $maxItems beach${maxItems == 1 ? "" : "es"}', onProgress);
+      } else {
+        _log('   Max this run: ∞ (no limit)', onProgress);
+      }
 
       final QuerySnapshot oldBeaches = await _firestore.collection(oldCollectionName).get();
       _log('📊 Found ${oldBeaches.docs.length} beaches to migrate', onProgress);
@@ -195,8 +201,13 @@ class MigrationService {
           _log('⏸️ Migration paused... (beach ${i + 1}/${oldBeaches.docs.length})', onProgress);
           await Future.delayed(const Duration(milliseconds: 500));
         }
-
         if (_shouldStop) break;
+
+        // ✅ Enforce per-run cap BEFORE starting next migration
+        if (maxItems > 0 && successCount >= maxItems) {
+          _log('⛔ Reached max of $maxItems migrated beaches for this run. Stopping.', onProgress);
+          break;
+        }
 
         final doc = oldBeaches.docs[i];
         final uuid = doc.id;
@@ -226,6 +237,7 @@ class MigrationService {
           }
 
           successCount++;
+          _log('[BEACH_DONE] ${i + 1}/${oldBeaches.docs.length} (this run: $successCount)', onProgress);
           _log('✅ Migrated beach ${i + 1}/${oldBeaches.docs.length}: $uuid', onProgress);
         } catch (e) {
           errorCount++;
@@ -246,6 +258,7 @@ class MigrationService {
       rethrow;
     }
   }
+
 
   /// Modified _migrateSingleBeach to return the new beach ID
   Future<String?> _migrateSingleBeach(
