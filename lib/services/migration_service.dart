@@ -313,24 +313,61 @@ class MigrationService {
       }
     }
 
-    // Save to Firestore
-    _log('💾 Saving beach data to Firestore...', onProgress);
-    final DocumentReference newBeachRef = await _firestore.collection(newCollectionName).add(newBeach.toMap());
-    _log('✅ Beach saved with ID: ${newBeachRef.id}', onProgress);
+    // Create the contribution BEFORE saving the beach (to get the contribution data)
+    final contribution = Contribution(
+      userId: 'migrated_user',
+      userEmail: 'migrated@beachbook.app',
+      timestamp: _extractTimestamp(oldData, ['timestamp']) ?? Timestamp.now(),
+      latitude: _extractDouble(oldData, ['latitude']) ?? 0.0,
+      longitude: _extractDouble(oldData, ['longitude']) ?? 0.0,
+      contributedImageUrls: newBeach.imageUrls, // Use the final image URLs (including AI)
+      localImagePaths: [],
+      isSynced: true,
+      userAnswers: _extractUserAnswersFromBeach(oldData),
+      aiConfirmedFloraFauna: [],
+      aiConfirmedRockTypes: [],
+    );
 
-    // Create the contribution
-    _log('📋 Creating contribution document...', onProgress);
-    await _migrateContributions(oldDoc.id, newBeachRef.id, oldData);
-    _log('✅ Contribution created', onProgress);
+    // Update beach with proper contribution count and aggregated data
+    newBeach = _createUpdatedBeach(
+      newBeach,
+      totalContributions: 1, // Exactly 1 contribution
+      aggregatedMetrics: _extractAggregatedMetrics(oldData),
+      aggregatedSingleChoices: _extractAggregatedSingleChoices(oldData),
+      aggregatedMultiChoices: _extractAggregatedMultiChoices(oldData),
+      aggregatedTextItems: _extractAggregatedTextItems(oldData),
+    );
 
-    return newBeachRef.id;
+    // Save to Firestore using a batch write to ensure atomicity
+    _log('💾 Saving beach and contribution to Firestore...', onProgress);
+
+    final batch = _firestore.batch();
+
+    // Add the beach document
+    final beachRef = _firestore.collection(newCollectionName).doc();
+    batch.set(beachRef, newBeach.toMap());
+
+    // Add the single contribution as a subcollection
+    final contributionRef = beachRef.collection('contributions').doc();
+    batch.set(contributionRef, contribution.toMap());
+
+    // Commit both at once
+    await batch.commit();
+
+    _log('✅ Beach and contribution saved with ID: ${beachRef.id}', onProgress);
+    return beachRef.id;
   }
 
-  /// Helper method to create updated beach with new data
+  /// Enhanced _createUpdatedBeach to handle contribution counts and aggregated data
   Beach _createUpdatedBeach(
       Beach originalBeach, {
         String? aiDescription,
         List<String>? imageUrls,
+        int? totalContributions,
+        Map<String, double>? aggregatedMetrics,
+        Map<String, dynamic>? aggregatedSingleChoices,
+        Map<String, dynamic>? aggregatedMultiChoices,
+        Map<String, List<dynamic>>? aggregatedTextItems,
       }) {
     return Beach(
       id: originalBeach.id,
@@ -347,11 +384,11 @@ class MigrationService {
       contributedDescriptions: originalBeach.contributedDescriptions,
       timestamp: originalBeach.timestamp,
       lastAggregated: originalBeach.lastAggregated,
-      totalContributions: originalBeach.totalContributions,
-      aggregatedMetrics: originalBeach.aggregatedMetrics,
-      aggregatedSingleChoices: originalBeach.aggregatedSingleChoices,
-      aggregatedMultiChoices: originalBeach.aggregatedMultiChoices,
-      aggregatedTextItems: originalBeach.aggregatedTextItems,
+      totalContributions: totalContributions ?? originalBeach.totalContributions,
+      aggregatedMetrics: aggregatedMetrics ?? originalBeach.aggregatedMetrics,
+      aggregatedSingleChoices: aggregatedSingleChoices ?? originalBeach.aggregatedSingleChoices,
+      aggregatedMultiChoices: aggregatedMultiChoices ?? originalBeach.aggregatedMultiChoices,
+      aggregatedTextItems: aggregatedTextItems ?? originalBeach.aggregatedTextItems,
       identifiedFloraFauna: originalBeach.identifiedFloraFauna,
       identifiedRockTypesComposition: originalBeach.identifiedRockTypesComposition,
       identifiedBeachComposition: originalBeach.identifiedBeachComposition,
@@ -528,25 +565,6 @@ class MigrationService {
       discoveryQuestions: discoveryQuestions,
       educationalInfo: educationalInfo,
     );
-  }
-
-  /// Migrate contributions/observations to the new structure
-  Future<void> _migrateContributions(String oldBeachId, String newBeachId, Map<String, dynamic> oldBeachData) async {
-    final Contribution contribution = Contribution(
-      userId: 'migrated_user',
-      userEmail: 'migrated@beachbook.app',
-      timestamp: _extractTimestamp(oldBeachData, ['timestamp']) ?? Timestamp.now(),
-      latitude: _extractDouble(oldBeachData, ['latitude']) ?? 0.0,
-      longitude: _extractDouble(oldBeachData, ['longitude']) ?? 0.0,
-      contributedImageUrls: _extractStringList(oldBeachData, ['imageUrls']),
-      localImagePaths: [],
-      isSynced: true,
-      userAnswers: _extractUserAnswersFromBeach(oldBeachData),
-      aiConfirmedFloraFauna: [],
-      aiConfirmedRockTypes: [],
-    );
-
-    await _firestore.collection(newCollectionName).doc(newBeachId).collection('contributions').add(contribution.toMap());
   }
 
   /// Extract user answers from the old beach structure

@@ -1,12 +1,13 @@
 // lib/services/gemini_service.dart
-// Facts-only beach description + DALL·E image generation,
-// upload via the same flow as user uploads (putFile to Firebase Storage).
+// Enhanced with AI image watermarking
 
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:dart_openai/dart_openai.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -16,18 +17,13 @@ import 'package:uuid/uuid.dart';
 import 'package:fuuuuck/services/api/secrets.dart';
 
 class GeminiService {
-  // Set this to the SAME folder you use for user uploads so rules/flow are identical.
-  // If your user flow uses a different folder, change it here to match.
   static const String _uploadFolder = 'beach_images';
 
   GeminiService() {
-    OpenAI.apiKey = openAIApiKey; // put your OpenAI key in secrets.dart
+    OpenAI.apiKey = openAIApiKey;
   }
 
-  // --- Public API -------------------------------------------------------------
-
-  /// Build a single-paragraph (120–180 words) description using ONLY facts from [userAnswers].
-  /// Any numeric value > 1 is considered "present" and mapped to an intensity word.
+  /// Build a single-paragraph beach description using ONLY facts from userAnswers
   Future<String> generateBeachDescription({
     required String beachName,
     required Map<String, dynamic> userAnswers,
@@ -84,11 +80,7 @@ Instructions:
     }
   }
 
-  /// Generate an image that matches the [description] (preferred) and upload it to Firebase.
-  /// If [description] is null, falls back to a tiny factual blurb from [subject].
-  ///
-  /// NOTE: For facts-only behavior, call [generateBeachDescription(...)] first and pass its
-  /// result as [description] so the image follows those facts exactly.
+  /// Generate an image with AI watermark and upload to Firebase
   Future<GeminiInfo> getInfoAndImage(
       String subject, {
         String? description,
@@ -96,7 +88,6 @@ Instructions:
     try {
       final finalDescription = description ?? await _generateDescription(subject);
 
-      // Create realistic, photo-style image matching the description
       final imagePrompt =
           'Create a high-quality, realistic photo-style image of this beach scene. '
           'Do not add extra elements beyond what is implied. Scene:\n$finalDescription';
@@ -117,11 +108,12 @@ Instructions:
         );
       }
 
-      // Decode base64 → write to temp file → upload with putFile (same as user flow)
-      final bytes = base64Decode(img.data.first.b64Json!);
-      final url = await _uploadPngAsUserFlow(bytes);
+      // Decode base64 -> add watermark -> upload
+      final originalBytes = base64Decode(img.data.first.b64Json!);
+      final watermarkedBytes = await _addAiWatermark(originalBytes);
+      final url = await _uploadPngAsUserFlow(watermarkedBytes);
 
-      debugPrint('Uploaded image URL: $url');
+      debugPrint('Uploaded watermarked image URL: $url');
 
       final imageWidget = Image.network(
         url,
@@ -144,9 +136,77 @@ Instructions:
     }
   }
 
-  // --- Private helpers --------------------------------------------------------
+  /// Add a subtle AI watermark to the image
+  Future<Uint8List> _addAiWatermark(Uint8List imageBytes) async {
+    try {
+      // Decode the image
+      final ui.Codec codec = await ui.instantiateImageCodec(imageBytes);
+      final ui.FrameInfo frameInfo = await codec.getNextFrame();
+      final ui.Image originalImage = frameInfo.image;
 
-  // If you ever need a tiny fallback description from just a subject.
+      // Create a canvas to draw on
+      final recorder = ui.PictureRecorder();
+      final canvas = Canvas(recorder);
+      final size = Size(originalImage.width.toDouble(), originalImage.height.toDouble());
+
+      // Draw the original image
+      canvas.drawImage(originalImage, Offset.zero, Paint());
+
+      // Create watermark text
+      const watermarkText = 'AI Generated';
+      final textStyle = TextStyle(
+        color: Colors.white.withOpacity(0.7),
+        fontSize: size.width * 0.03, // 3% of image width
+        fontWeight: FontWeight.w600,
+        shadows: [
+          Shadow(
+            color: Colors.black.withOpacity(0.5),
+            offset: const Offset(1, 1),
+            blurRadius: 2,
+          ),
+        ],
+      );
+
+      final textSpan = TextSpan(text: watermarkText, style: textStyle);
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      );
+
+      textPainter.layout();
+
+      // Position watermark at bottom-right corner with padding
+      final watermarkOffset = Offset(
+        size.width - textPainter.width - (size.width * 0.02), // 2% padding from right
+        size.height - textPainter.height - (size.height * 0.02), // 2% padding from bottom
+      );
+
+      textPainter.paint(canvas, watermarkOffset);
+
+      // Convert back to bytes
+      final picture = recorder.endRecording();
+      final ui.Image watermarkedImage = await picture.toImage(
+        originalImage.width,
+        originalImage.height,
+      );
+
+      final ByteData? byteData = await watermarkedImage.toByteData(
+        format: ui.ImageByteFormat.png,
+      );
+
+      originalImage.dispose();
+      watermarkedImage.dispose();
+
+      return byteData!.buffer.asUint8List();
+    } catch (e) {
+      debugPrint('Error adding watermark: $e');
+      // Return original image if watermarking fails
+      return imageBytes;
+    }
+  }
+
+  // ... [Rest of your existing methods remain the same]
+
   Future<String> _generateDescription(String subject) async {
     final prompt =
         'Provide a short, educational description (2–3 sentences) strictly about: "$subject". '
@@ -168,32 +228,26 @@ Instructions:
         'No description available.';
   }
 
-  // Mirror the user upload flow: write to temp file, then putFile to same folder.
   Future<String> _uploadPngAsUserFlow(Uint8List bytes) async {
     await _ensureSignedIn();
 
-    // 1) Write to temp
     final dir = await getTemporaryDirectory();
     final fname = '${const Uuid().v4()}.png';
     final fpath = '${dir.path}/$fname';
     final file = File(fpath);
     await file.writeAsBytes(bytes, flush: true);
 
-    // 2) putFile to the SAME path pattern user uploads use
     final path = '$_uploadFolder/$fname';
     final ref = FirebaseStorage.instance.ref(path);
     final metadata = SettableMetadata(contentType: 'image/png');
 
     await ref.putFile(file, metadata);
-
-    // 3) Get a durable download URL
     return ref.getDownloadURL();
   }
 
   Future<void> _ensureSignedIn() async {
     final auth = FirebaseAuth.instance;
     if (auth.currentUser == null) {
-      // Use your real sign-in flow if you require identified users.
       await auth.signInAnonymously();
     }
   }
@@ -207,10 +261,6 @@ Instructions:
     return 'abundant';
   }
 
-  /// Converts the raw userAnswers into a strict facts map the model must follow.
-  /// - Numbers: >1 → present=true and a human intensity word
-  /// - bool: present
-  /// - non-empty strings: text
   Map<String, dynamic> _extractFacts(Map<String, dynamic> userAnswers) {
     final facts = <String, dynamic>{};
     userAnswers.forEach((key, raw) {
@@ -236,7 +286,7 @@ Instructions:
 class GeminiInfo {
   final String description;
   final Widget image;
-  final String imageUrl; // store in Firestore or reuse later
+  final String imageUrl;
 
   GeminiInfo({
     required this.description,
