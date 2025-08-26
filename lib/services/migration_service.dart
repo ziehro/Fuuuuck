@@ -862,7 +862,7 @@ class MigrationService {
     for (final field in singleChoiceFields) {
       final value = data[field];
       if (value is String && value.isNotEmpty) {
-        singleChoices[field] = {value: 1};
+        singleChoices[field] = {value: 0};
       } else if (value is num) {
         // Handle case where old data stored these as numbers (indices)
         // You'll need to map these based on your old app's choice arrays
