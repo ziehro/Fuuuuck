@@ -9,6 +9,7 @@ import 'package:fuuuuck/services/api/inaturalist_service.dart';
 import 'package:fuuuuck/util/metric_ranges.dart';
 import 'package:fuuuuck/services/gemini_service.dart';
 import 'package:fuuuuck/util/long_press_descriptions.dart';
+import 'package:fuuuuck/widgets/fullscreen_image_viewer.dart';
 
 // Import the app green color from main.dart
 const Color arbutusGreen = Color(0xFF228B22); // Forest Green
@@ -646,9 +647,24 @@ class ImageDescriptionCarousel extends StatefulWidget {
 class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
   int _currentPage = 0;
 
+  void _openFullScreenViewer(int initialIndex) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FullScreenImageViewer(
+          imageUrls: widget.imageUrls,
+          initialIndex: initialIndex,
+          descriptions: widget.descriptions,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayDescriptions = widget.descriptions.isNotEmpty ? widget.descriptions : ['No description available.'];
+    final displayDescriptions = widget.descriptions.isNotEmpty
+        ? widget.descriptions
+        : ['No description available.'];
 
     return SizedBox(
       height: 350,
@@ -663,15 +679,65 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
             },
             itemCount: widget.imageUrls.length,
             itemBuilder: (context, index) {
-              return Image.network(
-                widget.imageUrls[index],
-                fit: BoxFit.cover,
-                width: double.infinity,
-                errorBuilder: (context, error, stackTrace) =>
-                const Center(child: Icon(Icons.broken_image, size: 100, color: Colors.grey)),
+              return GestureDetector(
+                onTap: () => _openFullScreenViewer(index),
+                child: Hero(
+                  tag: 'beach_image_$index',
+                  child: Image.network(
+                    widget.imageUrls[index],
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                              : null,
+                        ),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) =>
+                    const Center(
+                      child: Icon(Icons.broken_image,
+                          size: 100,
+                          color: Colors.grey),
+                    ),
+                  ),
+                ),
               );
             },
           ),
+
+          // Tap hint overlay (shows briefly)
+          Positioned(
+            top: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.zoom_in, color: Colors.white, size: 16),
+                  SizedBox(width: 4),
+                  Text(
+                    'Tap to zoom',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
           Positioned(
             top: 10,
             right: 10,
@@ -679,23 +745,30 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
               avatar: const Icon(Icons.people, color: Colors.white),
               label: Text(
                 '${widget.contributionCount} Contributions',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               backgroundColor: Colors.black.withOpacity(0.6),
             ),
           ),
+
           Container(
             width: double.infinity,
             color: Colors.black.withOpacity(0.6),
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
             child: Text(
-              widget.descriptions.length > _currentPage ? widget.descriptions[_currentPage] : displayDescriptions[0],
+              widget.descriptions.length > _currentPage
+                  ? widget.descriptions[_currentPage]
+                  : displayDescriptions[0],
               style: const TextStyle(color: Colors.white, fontSize: 16),
               textAlign: TextAlign.center,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
           ),
+
           Positioned(
             bottom: 16,
             child: Row(
@@ -707,7 +780,9 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
                   height: 8.0,
                   width: _currentPage == index ? 24.0 : 8.0,
                   decoration: BoxDecoration(
-                    color: _currentPage == index ? Theme.of(context).primaryColor : Colors.white,
+                    color: _currentPage == index
+                        ? Theme.of(context).primaryColor
+                        : Colors.white,
                     borderRadius: BorderRadius.circular(4.0),
                   ),
                 );
