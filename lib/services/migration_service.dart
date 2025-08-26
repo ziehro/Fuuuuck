@@ -259,7 +259,6 @@ class MigrationService {
     }
   }
 
-
   /// Modified _migrateSingleBeach to return the new beach ID
   Future<String?> _migrateSingleBeach(
       DocumentSnapshot oldDoc, {
@@ -329,9 +328,10 @@ class MigrationService {
     );
 
     // Update beach with proper contribution count and aggregated data
+    // IMPORTANT FIX: Set totalContributions to 0 so the Cloud Function can increment it to 1
     newBeach = _createUpdatedBeach(
       newBeach,
-      totalContributions: 1, // Exactly 1 contribution
+      totalContributions: 0, // Changed from 1 to 0 - let the Cloud Function handle the increment
       aggregatedMetrics: _extractAggregatedMetrics(oldData),
       aggregatedSingleChoices: _extractAggregatedSingleChoices(oldData),
       aggregatedMultiChoices: _extractAggregatedMultiChoices(oldData),
@@ -537,7 +537,8 @@ class MigrationService {
     final List<String> discoveryQuestions = <String>[];
     final String educationalInfo = '';
 
-    final int totalContributions = 1;
+    // Changed from 1 to 0 to match the fix in _migrateSingleBeach
+    final int totalContributions = 0;
 
     return Beach(
       id: '',
@@ -586,7 +587,45 @@ class MigrationService {
     for (final field in allFields) {
       final value = oldData[field];
       if (value != null) {
-        answers[field] = value;
+        // Convert numeric indices to text for single/multi choice fields
+        if (['Best Tide', 'Parking', 'Rock Type', 'Shape'].contains(field) && value is num) {
+          String? choiceText;
+          switch (field) {
+            case 'Best Tide':
+              final choices = ['Low', 'Mid', 'High', "Don't Matter"];
+              final index = value.toInt();
+              if (index >= 0 && index < choices.length) {
+                choiceText = choices[index];
+              }
+              break;
+            case 'Parking':
+              final choices = ['Parked on the beach', '1 minute', '5 minutes', '10 minutes', '30 minutes', '1 hour plus', 'Boat access only'];
+              final index = value.toInt();
+              if (index >= 0 && index < choices.length) {
+                choiceText = choices[index];
+              }
+              break;
+            case 'Rock Type':
+              final choices = ['Igneous', 'Sedimentary', 'Metamorphic'];
+              final index = value.toInt();
+              if (index >= 0 && index < choices.length) {
+                choiceText = choices[index];
+              }
+              break;
+            case 'Shape':
+              final choices = ['Concave', 'Convex', 'Isthmus', 'Horseshoe', 'Straight'];
+              final index = value.toInt();
+              if (index >= 0 && index < choices.length) {
+                choiceText = choices[index];
+              }
+              break;
+          }
+          if (choiceText != null) {
+            answers[field] = choiceText;
+          }
+        } else {
+          answers[field] = value;
+        }
       }
     }
 
@@ -777,31 +816,45 @@ class MigrationService {
     return null;
   }
 
+  /// Extract aggregated metrics - FIXED to avoid duplicates
   Map<String, double> _extractAggregatedMetrics(Map<String, dynamic> data) {
     final Map<String, double> metrics = {};
 
+    // Define ONLY the fields that should be treated as numeric metrics
+    // Explicitly EXCLUDE single/multi-choice fields to prevent duplicates
+    final List<String> singleChoiceFields = ['Best Tide', 'Parking', 'Rock Type', 'Shape'];
+    final List<String> multiChoiceFields = ['Bluff Comp', 'Man Made', 'Shade', 'Which Shells'];
+    final Set<String> excludedFields = {...singleChoiceFields, ...multiChoiceFields};
+
     final List<String> numericFields = [
-      'Anemones', 'Barnacles', 'Baseball Rocks', 'Best Tide', 'Bluff Grade',
+      'Anemones', 'Barnacles', 'Baseball Rocks', 'Bluff Grade',
       'Bluff Height', 'Boats on Shore', 'Boulders', 'Bugs', 'Caves', 'Clams',
       'Coal', 'Firewood', 'Garbage', 'Gold', 'Islands', 'Kindling', 'Length',
       'Limpets', 'Logs', 'Lookout', 'Midden', 'Mud', 'Mussels', 'Oysters',
       'Patio Nearby?', 'Pebbles', 'People', 'Private', 'Rocks', 'Sand',
-      'Snails', 'Stink', 'Stone', 'Trees', 'Turtles', 'Width', 'Windy'
+      'Snails', 'Stink', 'Stone', 'Trees', 'Turtles', 'Width', 'Windy',
+      // Add seaweed/kelp fields that are numeric sliders in the new system
+      'Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach',
     ];
 
     for (final field in numericFields) {
-      final value = data[field];
-      if (value is num) {
-        metrics[field] = value.toDouble();
+      // Double-check: only add if not in excluded fields
+      if (!excludedFields.contains(field)) {
+        final value = data[field];
+        if (value is num) {
+          metrics[field] = value.toDouble();
+        }
       }
     }
 
     return metrics;
   }
 
+  /// Extract aggregated single choices - FIXED to handle conversions properly
   Map<String, dynamic> _extractAggregatedSingleChoices(Map<String, dynamic> data) {
     final Map<String, dynamic> singleChoices = {};
 
+    // These are the fields that should be treated as single choices
     final List<String> singleChoiceFields = [
       'Best Tide', 'Parking', 'Rock Type', 'Shape'
     ];
@@ -810,6 +863,43 @@ class MigrationService {
       final value = data[field];
       if (value is String && value.isNotEmpty) {
         singleChoices[field] = {value: 1};
+      } else if (value is num) {
+        // Handle case where old data stored these as numbers (indices)
+        // You'll need to map these based on your old app's choice arrays
+        String? choiceText;
+        switch (field) {
+          case 'Best Tide':
+            final choices = ['Low', 'Mid', 'High', "Don't Matter"];
+            final index = value.toInt();
+            if (index >= 0 && index < choices.length) {
+              choiceText = choices[index];
+            }
+            break;
+          case 'Parking':
+            final choices = ['Parked on the beach', '1 minute', '5 minutes', '10 minutes', '30 minutes', '1 hour plus', 'Boat access only'];
+            final index = value.toInt();
+            if (index >= 0 && index < choices.length) {
+              choiceText = choices[index];
+            }
+            break;
+          case 'Rock Type':
+            final choices = ['Igneous', 'Sedimentary', 'Metamorphic'];
+            final index = value.toInt();
+            if (index >= 0 && index < choices.length) {
+              choiceText = choices[index];
+            }
+            break;
+          case 'Shape':
+            final choices = ['Concave', 'Convex', 'Isthmus', 'Horseshoe', 'Straight'];
+            final index = value.toInt();
+            if (index >= 0 && index < choices.length) {
+              choiceText = choices[index];
+            }
+            break;
+        }
+        if (choiceText != null) {
+          singleChoices[field] = {choiceText: 1};
+        }
       }
     }
 
