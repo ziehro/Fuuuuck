@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:math' as math;
+import 'package:fuuuuck/main.dart';
 
 import 'package:fuuuuck/services/beach_data_service.dart';
 import 'package:fuuuuck/services/settings_service.dart';
@@ -523,7 +524,7 @@ class MapScreenState extends State<MapScreen> {
               leading: const Icon(Icons.map),
               title: const Text('Standard'),
               trailing: settingsService.mapStyle == 'normal'
-                  ? const Icon(Icons.check, color: arbutusGreen)
+                  ? const Icon(Icons.check, color: seafoamGreen)
                   : null,
               onTap: () {
                 settingsService.setMapStyle('normal');
@@ -534,7 +535,7 @@ class MapScreenState extends State<MapScreen> {
               leading: const Icon(Icons.satellite_alt),
               title: const Text('Satellite'),
               trailing: settingsService.mapStyle == 'satellite'
-                  ? const Icon(Icons.check, color: arbutusGreen)
+                  ? const Icon(Icons.check, color: seafoamGreen)
                   : null,
               onTap: () {
                 settingsService.setMapStyle('satellite');
@@ -545,7 +546,7 @@ class MapScreenState extends State<MapScreen> {
               leading: const Icon(Icons.layers),
               title: const Text('Hybrid'),
               trailing: settingsService.mapStyle == 'hybrid'
-                  ? const Icon(Icons.check, color: arbutusGreen)
+                  ? const Icon(Icons.check, color: seafoamGreen)
                   : null,
               onTap: () {
                 settingsService.setMapStyle('hybrid');
@@ -556,7 +557,7 @@ class MapScreenState extends State<MapScreen> {
               leading: const Icon(Icons.terrain),
               title: const Text('Terrain'),
               trailing: settingsService.mapStyle == 'terrain'
-                  ? const Icon(Icons.check, color: arbutusGreen)
+                  ? const Icon(Icons.check, color: seafoamGreen)
                   : null,
               onTap: () {
                 settingsService.setMapStyle('terrain');

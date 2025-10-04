@@ -992,6 +992,9 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
   }
 }
 
+// Update to the MetricScaleBar widget in beach_detail_screen.dart
+// Replace the existing MetricScaleBar class (around line 800) with this version:
+
 class MetricScaleBar extends StatelessWidget {
   final String label;
   final double value;
@@ -1011,39 +1014,37 @@ class MetricScaleBar extends StatelessWidget {
     final double percentage = (max > min) ? ((value - min) / (max - min)).clamp(0.0, 1.0) : 0.0;
     final Color barColor = Color.lerp(Colors.blue, Colors.green, percentage) ?? Colors.grey;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text(value.toStringAsFixed(1), style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Container(
-              height: 10,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5),
-                color: Colors.grey[300],
-              ),
-              child: FractionallySizedBox(
-                widthFactor: percentage,
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(5),
-                    color: barColor,
+    return SizedBox(
+      width: double.infinity, // ADDED: Force full width
+      child: Card(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        clipBehavior: Clip.antiAlias,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // CHANGED: Removed the value display, only show label
+              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Container(
+                height: 10,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(5),
+                  color: Colors.grey[300],
+                ),
+                child: FractionallySizedBox(
+                  widthFactor: percentage,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(5),
+                      color: barColor,
+                    ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
