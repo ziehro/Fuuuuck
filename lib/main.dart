@@ -1,71 +1,65 @@
 // lib/main.dart
-import 'dart:io'; // <-- added for Platform checks
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_app_check/firebase_app_check.dart'; // <-- added
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:fuuuuck/services/sync_service.dart';
 
 import 'package:fuuuuck/firebase_options.dart';
-import 'package:fuuuuck/services/auth_service.dart'; // Import AuthService
-import 'package:fuuuuck/auth/auth_gate.dart';       // Import AuthGate
-import 'package:fuuuuck/services/beach_data_service.dart';
+import 'package:fuuuuck/services/auth_service.dart';
 import 'package:fuuuuck/services/settings_service.dart';
+import 'package:fuuuuck/auth/auth_gate.dart';
+import 'package:fuuuuck/services/beach_data_service.dart';
 
-// Theme colors based on Arbutus tree (example values)
-const Color arbutusBrown = Color(0xFF8B4513); // Saddle Brown
-const Color arbutusRed = Color(0xFFA52A2A);  // Brownish Red
-const Color arbutusGreen = Color(0xFF228B22); // Forest Green
-const Color arbutusCream = Color(0xFFF5F5DC); // Beige
+// 🏖️ BEACHY THEME COLORS
+const Color oceanBlue = Color(0xFF0077BE);        // Deep ocean blue
+const Color skyBlue = Color(0xFF87CEEB);          // Sky blue
+const Color sandBeige = Color(0xFFF4E4C1);        // Sandy beige
+const Color seafoamGreen = Color(0xFF7FCDCD);     // Seafoam green/teal
+const Color sunsetOrange = Color(0xFFFF8C42);     // Sunset orange
+const Color coralPink = Color(0xFFFF6B9D);        // Coral pink
+const Color driftwood = Color(0xFFB8956A);        // Driftwood brown
+const Color waveWhite = Color(0xFFFFFFF0);        // Off-white (wave foam)
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1) Firebase core
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  // 2) App Check — Debug now; flip to Play Integrity/DeviceCheck for production
   await FirebaseAppCheck.instance.activate(
     androidProvider: Platform.isAndroid
-    // Use Debug during development; switch to Play Integrity for release builds
-        ? AndroidProvider.debug // change to AndroidProvider.playIntegrity for prod
+        ? AndroidProvider.debug
         : AndroidProvider.debug,
-    appleProvider:
-    AppleProvider.debug, // change to AppleProvider.deviceCheck for prod
+    appleProvider: AppleProvider.debug,
   );
 
-  // 3) Firestore offline persistence (unchanged)
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
 
-  // 4) Start any background sync
   SyncService();
 
-  // 5) App start
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => AuthService()),
-        // Add BeachDataService as a regular Provider (not ChangeNotifier as it doesn't change state it provides)
-        Provider<BeachDataService>(create: (context) => BeachDataService()),
         ChangeNotifierProvider(create: (context) => SettingsService()),
+        Provider<BeachDataService>(create: (context) => BeachDataService()),
       ],
       child: const RootApp(),
     ),
   );
 }
 
-// Renamed MyApp to RootApp to clearly separate it from MyAppContent
 class RootApp extends StatelessWidget {
   const RootApp({super.key});
 
-  // Define the MaterialColor swatch as a static final here
-  static final MaterialColor _arbutusBrownSwatch = _createMaterialColor(arbutusBrown);
+  static final MaterialColor _oceanBlueSwatch = _createMaterialColor(oceanBlue);
 
   @override
   Widget build(BuildContext context) {
@@ -73,42 +67,168 @@ class RootApp extends StatelessWidget {
       title: 'Beach Book',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primaryColor: arbutusBrown,
-        primarySwatch: _arbutusBrownSwatch,
+        useMaterial3: true,
+
+        // Primary colors
+        primaryColor: oceanBlue,
+        primarySwatch: _oceanBlueSwatch,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: oceanBlue,
+          primary: oceanBlue,
+          secondary: seafoamGreen,
+          tertiary: coralPink,
+          surface: waveWhite,
+          background: sandBeige,
+        ),
+
+        // Scaffold
+        scaffoldBackgroundColor: sandBeige,
+
+        // AppBar
         appBarTheme: const AppBarTheme(
-          backgroundColor: arbutusBrown,
-          foregroundColor: arbutusCream,
-        ),
-        scaffoldBackgroundColor: arbutusCream,
-        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: arbutusBrown,
-          selectedItemColor: arbutusGreen,
-          unselectedItemColor: arbutusCream,
-          type: BottomNavigationBarType.fixed,
-        ),
-        floatingActionButtonTheme: const FloatingActionButtonThemeData(
-          backgroundColor: arbutusGreen,
-          foregroundColor: Colors.white,
-        ),
-        cardTheme: const CardThemeData(
-          color: arbutusRed,
+          backgroundColor: oceanBlue,
+          foregroundColor: waveWhite,
           elevation: 2,
+          centerTitle: false,
+        ),
+
+        // Cards
+        cardTheme: CardThemeData(
+          color: waveWhite,
+          elevation: 3,
+          shadowColor: oceanBlue.withOpacity(0.2),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.all(Radius.circular(8.0)),
+            borderRadius: BorderRadius.circular(16.0),
           ),
         ),
-        textTheme: const TextTheme(
-          bodyLarge: TextStyle(color: Colors.grey),
-          bodyMedium: TextStyle(color: Colors.grey),
-          titleLarge: TextStyle(color: arbutusBrown, fontWeight: FontWeight.bold),
+
+        // Floating Action Button
+        floatingActionButtonTheme: const FloatingActionButtonThemeData(
+          backgroundColor: seafoamGreen,
+          foregroundColor: Colors.white,
+          elevation: 4,
         ),
-        colorScheme: ColorScheme.fromSwatch(
-          primarySwatch: _arbutusBrownSwatch,
-        ).copyWith(
-          secondary: arbutusGreen,
+
+        // Bottom Navigation Bar
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: oceanBlue,
+          selectedItemColor: seafoamGreen,
+          unselectedItemColor: skyBlue,
+          type: BottomNavigationBarType.fixed,
+          elevation: 8,
+        ),
+
+        // Elevated Button
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: seafoamGreen,
+            foregroundColor: Colors.white,
+            elevation: 2,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        ),
+
+        // Text Button
+        textButtonTheme: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            foregroundColor: oceanBlue,
+          ),
+        ),
+
+        // Input Decoration
+        inputDecorationTheme: InputDecorationTheme(
+          filled: true,
+          fillColor: waveWhite,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: skyBlue.withOpacity(0.5)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: skyBlue.withOpacity(0.5)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: seafoamGreen, width: 2),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: coralPink, width: 1),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+
+        // Chip
+        chipTheme: ChipThemeData(
+          backgroundColor: skyBlue.withOpacity(0.3),
+          selectedColor: seafoamGreen,
+          secondarySelectedColor: seafoamGreen,
+          labelStyle: const TextStyle(color: oceanBlue),
+          secondaryLabelStyle: const TextStyle(color: Colors.white),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+        ),
+
+        // Text Theme
+        textTheme: const TextTheme(
+          displayLarge: TextStyle(color: oceanBlue, fontWeight: FontWeight.bold),
+          displayMedium: TextStyle(color: oceanBlue, fontWeight: FontWeight.bold),
+          displaySmall: TextStyle(color: oceanBlue, fontWeight: FontWeight.bold),
+          headlineLarge: TextStyle(color: oceanBlue, fontWeight: FontWeight.bold),
+          headlineMedium: TextStyle(color: oceanBlue, fontWeight: FontWeight.bold),
+          headlineSmall: TextStyle(color: oceanBlue, fontWeight: FontWeight.w600),
+          titleLarge: TextStyle(color: oceanBlue, fontWeight: FontWeight.bold),
+          titleMedium: TextStyle(color: oceanBlue, fontWeight: FontWeight.w600),
+          titleSmall: TextStyle(color: oceanBlue, fontWeight: FontWeight.w500),
+          bodyLarge: TextStyle(color: driftwood),
+          bodyMedium: TextStyle(color: driftwood),
+          bodySmall: TextStyle(color: driftwood),
+          labelLarge: TextStyle(color: oceanBlue),
+          labelMedium: TextStyle(color: oceanBlue),
+          labelSmall: TextStyle(color: driftwood),
+        ),
+
+        // Icon Theme
+        iconTheme: const IconThemeData(
+          color: oceanBlue,
+        ),
+
+        // Divider
+        dividerTheme: DividerThemeData(
+          color: skyBlue.withOpacity(0.3),
+          thickness: 1,
+        ),
+
+        // Slider
+        sliderTheme: SliderThemeData(
+          activeTrackColor: seafoamGreen,
+          inactiveTrackColor: skyBlue.withOpacity(0.3),
+          thumbColor: seafoamGreen,
+          overlayColor: seafoamGreen.withOpacity(0.2),
+        ),
+
+        // Switch
+        switchTheme: SwitchThemeData(
+          thumbColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.selected)) {
+              return seafoamGreen;
+            }
+            return Colors.grey;
+          }),
+          trackColor: MaterialStateProperty.resolveWith((states) {
+            if (states.contains(MaterialState.selected)) {
+              return seafoamGreen.withOpacity(0.5);
+            }
+            return Colors.grey.withOpacity(0.3);
+          }),
         ),
       ),
-      home: const AuthGate(), // Your app's entry point for auth flow
+      home: const AuthGate(),
     );
   }
 

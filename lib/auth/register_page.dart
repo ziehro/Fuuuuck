@@ -2,10 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/main.dart'; // For accessing theme colors
+import 'package:fuuuuck/main.dart';
+
+// Import the beachy theme colors
+// These are already defined in main.dart, so we just reference them
 
 class RegisterPage extends StatefulWidget {
-  final VoidCallback? onLoginTap; // Callback to switch to login page
+  final VoidCallback? onLoginTap;
 
   const RegisterPage({super.key, this.onLoginTap});
 
@@ -21,7 +24,7 @@ class _RegisterPageState extends State<RegisterPage> {
 
   Future<void> _signUp() async {
     setState(() {
-      _errorMessage = null; // Clear previous errors
+      _errorMessage = null;
     });
 
     if (_passwordController.text != _confirmPasswordController.text) {
@@ -37,10 +40,9 @@ class _RegisterPageState extends State<RegisterPage> {
         _emailController.text,
         _passwordController.text,
       );
-      // Success, app will automatically navigate to authenticated state
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', ''); // Clean up error message
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
       debugPrint('Register Error: $e');
     }
@@ -49,10 +51,11 @@ class _RegisterPageState extends State<RegisterPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: arbutusCream,
+      backgroundColor: sandBeige,
       appBar: AppBar(
-        title: const Text('Register', style: TextStyle(color: arbutusCream)),
-        backgroundColor: arbutusBrown,
+        title: const Text('Register'),
+        backgroundColor: oceanBlue,
+        foregroundColor: waveWhite,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -60,21 +63,45 @@ class _RegisterPageState extends State<RegisterPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Icon(Icons.nature_people, size: 80, color: arbutusGreen), // App icon
+              // Beach/nature icon with gradient
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [sunsetOrange, coralPink],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.wb_sunny,
+                  size: 80,
+                  color: Colors.white,
+                ),
+              ),
               const SizedBox(height: 20),
-              Text('Join Beach Book!', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Join Beach Book!',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: oceanBlue,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Start your beach exploration journey',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: driftwood,
+                ),
+              ),
               const SizedBox(height: 40),
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'Email',
-                  prefixIcon: Icon(Icons.email, color: arbutusBrown),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: arbutusGreen, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.email, color: seafoamGreen),
                 ),
               ),
               const SizedBox(height: 20),
@@ -83,12 +110,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock, color: arbutusBrown),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: arbutusGreen, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.lock, color: seafoamGreen),
                 ),
               ),
               const SizedBox(height: 20),
@@ -97,12 +119,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Confirm Password',
-                  prefixIcon: Icon(Icons.lock_outline, color: arbutusBrown),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: arbutusGreen, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.lock_outline, color: seafoamGreen),
                 ),
               ),
               if (_errorMessage != null)
@@ -110,17 +127,19 @@ class _RegisterPageState extends State<RegisterPage> {
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 14),
+                    style: const TextStyle(color: coralPink, fontSize: 14),
                   ),
                 ),
               const SizedBox(height: 30),
               ElevatedButton(
                 onPressed: _signUp,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: arbutusGreen,
-                  foregroundColor: arbutusCream,
+                  backgroundColor: seafoamGreen,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text('Register', style: TextStyle(fontSize: 18)),
               ),
@@ -128,9 +147,12 @@ class _RegisterPageState extends State<RegisterPage> {
               TextButton(
                 onPressed: widget.onLoginTap,
                 style: TextButton.styleFrom(
-                  foregroundColor: arbutusBrown,
+                  foregroundColor: oceanBlue,
                 ),
-                child: const Text("Already have an account? Sign In"),
+                child: const Text(
+                  'Already have an account? Sign In',
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
             ],
           ),

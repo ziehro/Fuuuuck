@@ -1,11 +1,11 @@
 // lib/auth/login_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fuuuuck/services/auth_service.dart'; // Make sure this import is correct
-import 'package:fuuuuck/main.dart'; // For accessing theme colors
+import 'package:fuuuuck/services/auth_service.dart';
+import 'package:fuuuuck/main.dart';
 
 class LoginPage extends StatefulWidget {
-  final VoidCallback? onRegisterTap; // Callback to switch to register page
+  final VoidCallback? onRegisterTap;
 
   const LoginPage({super.key, this.onRegisterTap});
 
@@ -20,7 +20,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _signIn() async {
     setState(() {
-      _errorMessage = null; // Clear previous errors
+      _errorMessage = null;
     });
     final authService = Provider.of<AuthService>(context, listen: false);
     try {
@@ -28,10 +28,9 @@ class _LoginPageState extends State<LoginPage> {
         _emailController.text,
         _passwordController.text,
       );
-      // Success, app will automatically navigate to authenticated state
     } catch (e) {
       setState(() {
-        _errorMessage = e.toString().replaceFirst('Exception: ', ''); // Clean up error message
+        _errorMessage = e.toString().replaceFirst('Exception: ', '');
       });
       debugPrint('Login Error: $e');
     }
@@ -40,10 +39,11 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: arbutusCream, // Use your defined theme color
+      backgroundColor: sandBeige,
       appBar: AppBar(
-        title: const Text('Login', style: TextStyle(color: arbutusCream)),
-        backgroundColor: arbutusBrown,
+        title: const Text('Login'),
+        backgroundColor: oceanBlue,
+        foregroundColor: waveWhite,
       ),
       body: Center(
         child: SingleChildScrollView(
@@ -51,21 +51,45 @@ class _LoginPageState extends State<LoginPage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              Icon(Icons.beach_access, size: 80, color: arbutusGreen), // App icon
+              // Beach icon with gradient background
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [seafoamGreen, skyBlue],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.beach_access,
+                  size: 80,
+                  color: Colors.white,
+                ),
+              ),
               const SizedBox(height: 20),
-              Text('Welcome to Beach Book!', style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                'Welcome to Beach Book!',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  color: oceanBlue,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Discover and share amazing beaches',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: driftwood,
+                ),
+              ),
               const SizedBox(height: 40),
               TextField(
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   labelText: 'Email',
-                  prefixIcon: Icon(Icons.email, color: arbutusBrown),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: arbutusGreen, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.email, color: seafoamGreen),
                 ),
               ),
               const SizedBox(height: 20),
@@ -74,12 +98,7 @@ class _LoginPageState extends State<LoginPage> {
                 obscureText: true,
                 decoration: InputDecoration(
                   labelText: 'Password',
-                  prefixIcon: Icon(Icons.lock, color: arbutusBrown),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: arbutusGreen, width: 2),
-                  ),
+                  prefixIcon: Icon(Icons.lock, color: seafoamGreen),
                 ),
               ),
               if (_errorMessage != null)
@@ -87,17 +106,19 @@ class _LoginPageState extends State<LoginPage> {
                   padding: const EdgeInsets.only(top: 10),
                   child: Text(
                     _errorMessage!,
-                    style: const TextStyle(color: Colors.red, fontSize: 14),
+                    style: const TextStyle(color: coralPink, fontSize: 14),
                   ),
                 ),
               const SizedBox(height: 30),
               ElevatedButton(
                 onPressed: _signIn,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: arbutusGreen, // Button background
-                  foregroundColor: arbutusCream, // Button text color
+                  backgroundColor: seafoamGreen,
+                  foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                 ),
                 child: const Text('Sign In', style: TextStyle(fontSize: 18)),
               ),
@@ -105,9 +126,12 @@ class _LoginPageState extends State<LoginPage> {
               TextButton(
                 onPressed: widget.onRegisterTap,
                 style: TextButton.styleFrom(
-                  foregroundColor: arbutusBrown,
+                  foregroundColor: oceanBlue,
                 ),
-                child: const Text("Don't have an account? Register here"),
+                child: const Text(
+                  "Don't have an account? Register here",
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
             ],
           ),

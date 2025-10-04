@@ -10,9 +10,7 @@ import 'package:fuuuuck/util/metric_ranges.dart';
 import 'package:fuuuuck/services/gemini_service.dart';
 import 'package:fuuuuck/util/long_press_descriptions.dart';
 import 'package:fuuuuck/widgets/fullscreen_image_viewer.dart';
-
-// Import the app green color from main.dart
-const Color arbutusGreen = Color(0xFF228B22); // Forest Green
+import 'package:fuuuuck/main.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
@@ -314,15 +312,58 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildFloraTab(BuildContext context, Beach beach) {
+    // Check if there's any flora data
+    final hasMetrics = floraMetricKeys.any((key) {
+      final value = beach.aggregatedMetrics[key];
+      if (value == null) return false;
+      final range = metricRanges[key];
+      final minThreshold = range?.min.toDouble() ?? 0.0;
+      return value > minThreshold;
+    });
+
+    final hasTreeTypes = beach.aggregatedTextItems.containsKey('Tree types') &&
+        (beach.aggregatedTextItems['Tree types'] as List).isNotEmpty;
+
+    if (!hasMetrics && !hasTreeTypes) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.eco, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No flora data yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Be the first to contribute!',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildMetricsCategoryTab(context, beach, floraMetricKeys),
-          const SizedBox(height: 16),
-          _buildCategoryTitle(context, 'Answers'),
-          if (beach.aggregatedTextItems.containsKey('Tree types'))
+          if (hasTreeTypes) ...[
+            const SizedBox(height: 16),
+            _buildCategoryTitle(context, 'Answers'),
             _buildDataRow(
               context,
               'Tree types',
@@ -331,22 +372,69 @@ class BeachDetailScreen extends StatelessWidget {
                 children: (beach.aggregatedTextItems['Tree types'] as List<dynamic>).map((e) => Text(e.toString(), textAlign: TextAlign.end)).toList(),
               ),
             ),
+          ],
         ],
       ),
     );
   }
 
   Widget _buildFaunaTab(BuildContext context, Beach beach) {
+    // Check if there's any fauna data
+    final hasMetrics = faunaMetricKeys.any((key) {
+      final value = beach.aggregatedMetrics[key];
+      if (value == null) return false;
+      final range = metricRanges[key];
+      final minThreshold = range?.min.toDouble() ?? 0.0;
+      return value > minThreshold;
+    });
+
+    final hasBirds = beach.aggregatedTextItems.containsKey('Birds') &&
+        (beach.aggregatedTextItems['Birds'] as List).isNotEmpty;
+    final hasShells = beach.aggregatedMultiChoices.containsKey('Which Shells') &&
+        (beach.aggregatedMultiChoices['Which Shells'] as Map).isNotEmpty;
+
+    if (!hasMetrics && !hasBirds && !hasShells) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.pets, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No fauna data yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Be the first to contribute!',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // This will now render in the exact order of faunaMetricKeys (alphabetical)
           _buildMetricsCategoryTab(context, beach, faunaMetricKeys),
-          const SizedBox(height: 16),
-          _buildCategoryTitle(context, 'Answers'),
-          if (beach.aggregatedTextItems.containsKey('Birds'))
+          if (hasBirds || hasShells) ...[
+            const SizedBox(height: 16),
+            _buildCategoryTitle(context, 'Answers'),
+          ],
+          if (hasBirds)
             _buildDataRow(
               context,
               'Birds',
@@ -355,7 +443,7 @@ class BeachDetailScreen extends StatelessWidget {
                 children: (beach.aggregatedTextItems['Birds'] as List<dynamic>).map((e) => Text(e.toString(), textAlign: TextAlign.end)).toList(),
               ),
             ),
-          if (beach.aggregatedMultiChoices.containsKey('Which Shells'))
+          if (hasShells)
             _buildDataRow(
               context,
               'Which Shells',
@@ -370,9 +458,47 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildWoodTab(BuildContext context, Beach beach) {
+    final hasMetrics = woodMetricKeys.any((key) {
+      final value = beach.aggregatedMetrics[key];
+      if (value == null) return false;
+      final range = metricRanges[key];
+      final minThreshold = range?.min.toDouble() ?? 0.0;
+      return value > minThreshold;
+    });
+
+    if (!hasMetrics) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.park, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No driftwood data yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Be the first to contribute!',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
-      // This will now render Kindling -> Firewood -> Logs -> Trees
       child: _buildMetricsCategoryTab(context, beach, woodMetricKeys),
     );
   }
@@ -382,6 +508,59 @@ class BeachDetailScreen extends StatelessWidget {
       ..remove('Width')
       ..remove('Length');
 
+    // Check if there's any composition data at all
+    final hasWidthOrLength = (beach.aggregatedMetrics['Width'] ?? 0) > 0 ||
+        (beach.aggregatedMetrics['Length'] ?? 0) > 0;
+
+    // Filter remaining keys to check if there's any data
+    final hasOtherComposition = remainingCompositionKeys.any((key) {
+      final value = beach.aggregatedMetrics[key];
+      if (value == null) return false;
+      final range = metricRanges[key];
+      final minThreshold = range?.min.toDouble() ?? 0.0;
+      return value > minThreshold;
+    });
+
+    // Check for single/multi choice data
+    final hasShapeData = beach.aggregatedSingleChoices.containsKey('Shape') &&
+        (beach.aggregatedSingleChoices['Shape'] as Map).isNotEmpty;
+    final hasBluffCompData = beach.aggregatedMultiChoices.containsKey('Bluff Comp') &&
+        (beach.aggregatedMultiChoices['Bluff Comp'] as Map).isNotEmpty;
+    final hasRockTypeData = beach.aggregatedSingleChoices.containsKey('Rock Type') &&
+        (beach.aggregatedSingleChoices['Rock Type'] as Map).isNotEmpty;
+
+    // If no data at all in this category
+    if (!hasWidthOrLength && !hasOtherComposition && !hasShapeData && !hasBluffCompData && !hasRockTypeData) {
+      return Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.terrain, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'No composition data yet',
+                style: TextStyle(
+                  fontSize: 18,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Be the first to contribute!',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[500],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -389,9 +568,11 @@ class BeachDetailScreen extends StatelessWidget {
         children: [
           _buildDimensionsRow(context, beach),
           _buildMetricsCategoryTab(context, beach, remainingCompositionKeys, isComposition: true),
-          const SizedBox(height: 16),
-          _buildCategoryTitle(context, 'Answers'),
-          if (beach.aggregatedSingleChoices.containsKey('Shape'))
+          if (hasShapeData || hasBluffCompData || hasRockTypeData) ...[
+            const SizedBox(height: 16),
+            _buildCategoryTitle(context, 'Answers'),
+          ],
+          if (hasShapeData)
             _buildDataRow(
               context,
               'Shape',
@@ -400,7 +581,7 @@ class BeachDetailScreen extends StatelessWidget {
                 children: (beach.aggregatedSingleChoices['Shape'] as Map<String, dynamic>).entries.map((e) => Text('${e.key}: ${e.value}')).toList(),
               ),
             ),
-          if (beach.aggregatedMultiChoices.containsKey('Bluff Comp'))
+          if (hasBluffCompData)
             _buildDataRow(
               context,
               'Bluff Comp',
@@ -409,7 +590,7 @@ class BeachDetailScreen extends StatelessWidget {
                 children: (beach.aggregatedMultiChoices['Bluff Comp'] as Map<String, dynamic>).entries.map((e) => Text('${e.key}: ${e.value}')).toList(),
               ),
             ),
-          if (beach.aggregatedSingleChoices.containsKey('Rock Type'))
+          if (hasRockTypeData)
             _buildDataRow(
               context,
               'Rock Type',
@@ -424,8 +605,10 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildDimensionsRow(BuildContext context, Beach beach) {
-    final bool hasWidth = beach.aggregatedMetrics.containsKey('Width');
-    final bool hasLength = beach.aggregatedMetrics.containsKey('Length');
+    final bool hasWidth = beach.aggregatedMetrics.containsKey('Width') &&
+        (beach.aggregatedMetrics['Width'] ?? 0) > 0;
+    final bool hasLength = beach.aggregatedMetrics.containsKey('Length') &&
+        (beach.aggregatedMetrics['Length'] ?? 0) > 0;
 
     if (!hasWidth && !hasLength) {
       return const SizedBox.shrink();
@@ -495,7 +678,7 @@ class BeachDetailScreen extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(5),
-                    color: arbutusGreen,
+                    color: seafoamGreen,
                   ),
                 ),
               ),
@@ -537,27 +720,41 @@ class BeachDetailScreen extends StatelessWidget {
     final Map<String, double> filteredMetrics = {};
 
     if (includeOther) {
-      // leave "Other" as-is (not requested); it will show anything not in known lists.
       final allKnownKeys = [...floraMetricKeys, ...faunaMetricKeys, ...compositionOrderedKeys, ...woodMetricKeys];
       beach.aggregatedMetrics.forEach((key, value) {
         if (!allKnownKeys.contains(key)) {
-          filteredMetrics[key] = value;
+          // Check if value is above minimum threshold
+          final range = metricRanges[key];
+          final minThreshold = range?.min.toDouble() ?? 0.0;
+          if (value > minThreshold) {
+            filteredMetrics[key] = value;
+          }
         }
       });
     } else {
-      // IMPORTANT CHANGE: always respect the order of `keys`
       for (final key in keys) {
         final v = beach.aggregatedMetrics[key];
         if (v != null) {
-          filteredMetrics[key] = v;
+          // Get the minimum threshold for this metric
+          final range = metricRanges[key];
+          final minThreshold = range?.min.toDouble() ?? 0.0;
+
+          // Only include if value is above minimum
+          if (v > minThreshold) {
+            filteredMetrics[key] = v;
+          }
         }
       }
-
-      // Composition already passes an ordered `keys`, so the above covers both cases.
     }
 
     if (filteredMetrics.isEmpty) {
-      return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16.0),
+        child: Text(
+          'No significant data for this category yet.',
+          style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
+        ),
+      );
     }
 
     return Column(
