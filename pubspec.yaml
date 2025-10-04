@@ -2,6 +2,8 @@ name: mybeachbook
 description: A real-time beach object recognition and data logging app.
 publish_to: 'none'
 
+version: 1.0.0+2
+
 environment:
   sdk: '^3.4.0' # Using the modern caret (^) syntax as required.
 
@@ -77,14 +79,8 @@ flutter_native_splash:
 # Flutter Launcher Icons Configuration (Top-level)
 # This package generates the app icon that appears on your home screen.
 flutter_launcher_icons:
-  android: true # Generate launcher icons for Android
-  ios: false # Set to true when you configure iOS
-  image_path: "assets/splash_icon.png" # Use the same icon for your app launcher
-  # Optional: For Android 8.0+ adaptive icons, you can specify layers.
-  # If you provide both adaptive_icon_background and adaptive_icon_foreground,
-  # it will generate adaptive icons. Otherwise, it will use image_path
-  # to generate legacy icons that will also work on adaptive launchers.
-  # For simplicity, sticking to `image_path` will generate a single image icon
-  # that Android will try to fit into adaptive shapes.
-  # adaptive_icon_background: "#8B4513" # A solid color background for adaptive icons
-  # adaptive_icon_foreground: "assets/splash_icon_foreground.png"
+  android: true
+  ios: true
+  image_path: "assets/app_icon.png"
+  adaptive_icon_background: "#FFFFFF" # or one of your theme colors
+  adaptive_icon_foreground: "assets/app_icon.png"
