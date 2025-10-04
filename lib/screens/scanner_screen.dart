@@ -140,12 +140,11 @@ class _ScannerScreenState extends State<ScannerScreen> {
       }
     }
 
-    // ** FIX: Clear results to go back to camera, but keep confirmed items **
     setState(() {
       _showSnackBar('Confirmed ${_selectedSuggestionIndices.length} item(s)!');
       _identificationResults.clear();
       _selectedSuggestionIndices.clear();
-      _imagePath = null; // Go back to camera preview
+      _imagePath = null;
     });
   }
 
@@ -179,93 +178,106 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Scanner'),
-        // ** NEW: "Done" button appears when you have confirmed items **
-        actions: [
-          if (_confirmedIdentifications.isNotEmpty)
-            TextButton(
-              onPressed: () {
-                // Return the confirmed data to the previous screen
-                Navigator.of(context).pop(_confirmedIdentifications);
-              },
-              child: Text(
-                'Done (${_confirmedIdentifications.length})',
-                style: TextStyle(color: Theme.of(context).appBarTheme.foregroundColor),
-              ),
-            )
-        ],
-      ),
-      body: FutureBuilder<void>(
-        future: _initializeControllerFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return Stack(
-            children: [
-              GestureDetector(
-                onScaleStart: _handleScaleStart,
-                onScaleUpdate: _handleScaleUpdate,
-                child: CameraPreview(_controller!),
-              ),
-              // ** NEW: Display confirmed items at the bottom **
-              if (_confirmedIdentifications.isNotEmpty)
-                Positioned(
-                  bottom: 90,
-                  left: 10,
-                  right: 10,
-                  child: Card(
-                    color: Colors.black.withOpacity(0.7),
-                    child: Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: Wrap(
-                        spacing: 8.0,
-                        runSpacing: 4.0,
-                        children: _confirmedIdentifications.map((item) {
-                          return Chip(
-                            label: Text(item.commonName, style: const TextStyle(color: Colors.white)),
-                            backgroundColor: Theme.of(context).primaryColor,
-                            onDeleted: () {
-                              setState(() {
-                                _confirmedIdentifications.remove(item);
-                              });
-                            },
-                          );
-                        }).toList(),
-                      ),
+    return FutureBuilder<void>(
+      future: _initializeControllerFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        return Stack(
+          children: [
+            GestureDetector(
+              onScaleStart: _handleScaleStart,
+              onScaleUpdate: _handleScaleUpdate,
+              child: CameraPreview(_controller!),
+            ),
+
+            // Confirmed items display at bottom
+            if (_confirmedIdentifications.isNotEmpty)
+              Positioned(
+                bottom: 90,
+                left: 10,
+                right: 10,
+                child: Card(
+                  color: Colors.black.withOpacity(0.7),
+                  child: Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Confirmed Identifications',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () {
+                                // Return the confirmed data
+                                Navigator.of(context).pop(_confirmedIdentifications);
+                              },
+                              child: Text(
+                                'Done (${_confirmedIdentifications.length})',
+                                style: const TextStyle(color: Colors.greenAccent),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8.0,
+                          runSpacing: 4.0,
+                          children: _confirmedIdentifications.map((item) {
+                            return Chip(
+                              label: Text(item.commonName),
+                              deleteIconColor: Colors.white,
+                              onDeleted: () {
+                                setState(() {
+                                  _confirmedIdentifications.remove(item);
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              if (_isProcessingImage)
-                Container(
-                  color: Colors.black.withOpacity(0.5),
-                  alignment: Alignment.center,
-                  child: const CircularProgressIndicator(color: Colors.white),
-                ),
-              if (_identificationResults.isNotEmpty && !_isProcessingImage)
-                _buildResultsOverlay(),
-              Positioned(
-                bottom: 20.0,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: FloatingActionButton(
-                    onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture,
-                    backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
-                        ? Colors.grey
-                        : Theme.of(context).floatingActionButtonTheme.backgroundColor,
-                    child: _isProcessingImage
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Icon(Icons.camera_alt),
-                  ),
+              ),
+
+            if (_isProcessingImage)
+              Container(
+                color: Colors.black.withOpacity(0.5),
+                alignment: Alignment.center,
+                child: const CircularProgressIndicator(color: Colors.white),
+              ),
+
+            if (_identificationResults.isNotEmpty && !_isProcessingImage)
+              _buildResultsOverlay(),
+
+            Positioned(
+              bottom: 20.0,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: FloatingActionButton(
+                  onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture,
+                  backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
+                      ? Colors.grey
+                      : Theme.of(context).floatingActionButtonTheme.backgroundColor,
+                  child: _isProcessingImage
+                      ? const CircularProgressIndicator(color: Colors.white)
+                      : const Icon(Icons.camera_alt),
                 ),
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     );
   }
 

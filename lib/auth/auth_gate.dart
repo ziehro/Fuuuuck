@@ -191,23 +191,46 @@ class _MyAppContentState extends State<MyAppContent> {
       );
     }
 
-    // Common actions for all tabs
-    actions.addAll([
-      IconButton(
-        icon: const Icon(Icons.settings),
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const SettingsScreen()),
-          );
+    // Menu button with Settings and Sign Out (always visible on all tabs)
+    actions.add(
+      PopupMenuButton<String>(
+        icon: const Icon(Icons.more_vert),
+        tooltip: 'Menu',
+        onSelected: (value) {
+          if (value == 'settings') {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SettingsScreen()),
+            );
+          } else if (value == 'sign_out') {
+            _showSignOutConfirmation();
+          }
         },
+        itemBuilder: (context) => [
+          const PopupMenuItem<String>(
+            value: 'settings',
+            child: Row(
+              children: [
+                Icon(Icons.settings),
+                SizedBox(width: 12),
+                Text('Settings'),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+          const PopupMenuItem<String>(
+            value: 'sign_out',
+            child: Row(
+              children: [
+                Icon(Icons.logout, color: Colors.red),
+                SizedBox(width: 12),
+                Text('Sign Out', style: TextStyle(color: Colors.red)),
+              ],
+            ),
+          ),
+        ],
       ),
-      IconButton(
-        icon: const Icon(Icons.logout),
-        onPressed: _showSignOutConfirmation, // Now calls confirmation dialog
-        tooltip: 'Sign Out',
-      ),
-    ]);
+    );
 
     return actions;
   }

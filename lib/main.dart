@@ -12,6 +12,7 @@ import 'package:fuuuuck/firebase_options.dart';
 import 'package:fuuuuck/services/auth_service.dart'; // Import AuthService
 import 'package:fuuuuck/auth/auth_gate.dart';       // Import AuthGate
 import 'package:fuuuuck/services/beach_data_service.dart';
+import 'package:fuuuuck/services/settings_service.dart';
 
 // Theme colors based on Arbutus tree (example values)
 const Color arbutusBrown = Color(0xFF8B4513); // Saddle Brown
@@ -52,6 +53,7 @@ void main() async {
         ChangeNotifierProvider(create: (context) => AuthService()),
         // Add BeachDataService as a regular Provider (not ChangeNotifier as it doesn't change state it provides)
         Provider<BeachDataService>(create: (context) => BeachDataService()),
+        ChangeNotifierProvider(create: (context) => SettingsService()),
       ],
       child: const RootApp(),
     ),

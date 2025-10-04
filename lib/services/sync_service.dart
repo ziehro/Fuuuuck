@@ -26,55 +26,62 @@ class SyncService {
 
   void _handleConnectivityChange(List<ConnectivityResult> results) {
     // Check if at least one of the connectivity results is not 'none'
-    // The list can contain multiple results for devices with multiple network adapters
-    if (results.contains(ConnectivityResult.mobile) || results.contains(ConnectivityResult.wifi)) {
+    if (results.contains(ConnectivityResult.mobile) ||
+        results.contains(ConnectivityResult.wifi)) {
       print("Device is online. Checking for unsynced data...");
-      _syncPendingContributions();
+      syncPendingContributions(); // Made public
     } else {
       print("Device is offline.");
     }
   }
 
-  Future<void> _syncPendingContributions() async {
-    final querySnapshot = await _firestore
-        .collectionGroup('contributions')
-        .where('isSynced', isEqualTo: false)
-        .get();
+  // Made public so settings can call it
+  Future<void> syncPendingContributions() async {
+    try {
+      final querySnapshot = await _firestore
+          .collectionGroup('contributions')
+          .where('isSynced', isEqualTo: false)
+          .get();
 
-    if (querySnapshot.docs.isEmpty) {
-      print("No unsynced contributions found.");
-      return;
-    }
+      if (querySnapshot.docs.isEmpty) {
+        print("No unsynced contributions found.");
+        return;
+      }
 
-    print("Found ${querySnapshot.docs.length} unsynced contributions. Starting sync...");
+      print("Found ${querySnapshot.docs.length} unsynced contributions. Starting sync...");
 
-    for (final doc in querySnapshot.docs) {
-      try {
-        final contributionData = doc.data();
-        final List<String> localPaths = List<String>.from(contributionData['localImagePaths'] ?? []);
-        List<String> uploadedUrls = [];
+      for (final doc in querySnapshot.docs) {
+        try {
+          final contributionData = doc.data();
+          final List<String> localPaths =
+          List<String>.from(contributionData['localImagePaths'] ?? []);
+          List<String> uploadedUrls = [];
 
-        for (final path in localPaths) {
-          final file = File(path);
-          if (await file.exists()) {
-            final url = await _beachDataService.uploadImage(file);
-            if (url != null) {
-              uploadedUrls.add(url);
+          for (final path in localPaths) {
+            final file = File(path);
+            if (await file.exists()) {
+              final url = await _beachDataService.uploadImage(file);
+              if (url != null) {
+                uploadedUrls.add(url);
+              }
             }
           }
+
+          // Update the document in Firestore
+          await doc.reference.update({
+            'contributedImageUrls': FieldValue.arrayUnion(uploadedUrls),
+            'localImagePaths': [],
+            'isSynced': true,
+          });
+
+          print("Successfully synced contribution ${doc.id}");
+        } catch (e) {
+          print("Error syncing contribution ${doc.id}: $e");
         }
-
-        // Update the document in Firestore
-        await doc.reference.update({
-          'contributedImageUrls': FieldValue.arrayUnion(uploadedUrls),
-          'localImagePaths': [],
-          'isSynced': true,
-        });
-
-        print("Successfully synced contribution ${doc.id}");
-      } catch (e) {
-        print("Error syncing contribution ${doc.id}: $e");
       }
+    } catch (e) {
+      print("Error in syncPendingContributions: $e");
+      rethrow;
     }
   }
 
