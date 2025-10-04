@@ -1,7 +1,7 @@
 // lib/widgets/add_beach/dynamic_form_page.dart
 import 'package:flutter/material.dart';
-import 'package:fuuuuck/models/form_data_model.dart';
-import 'package:fuuuuck/widgets/add_beach/form_field_widget.dart';
+import 'package:mybeachbook/models/form_data_model.dart';
+import 'package:mybeachbook/widgets/add_beach/form_field_widget.dart';
 
 class DynamicFormPage extends StatelessWidget {
   final List<FormFieldData> fields;

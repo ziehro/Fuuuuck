@@ -1,16 +1,16 @@
 // lib/screens/beach_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fuuuuck/models/beach_model.dart';
-import 'package:fuuuuck/services/beach_data_service.dart';
-import 'package:fuuuuck/screens/add_beach_screen.dart';
+import 'package:mybeachbook/models/beach_model.dart';
+import 'package:mybeachbook/services/beach_data_service.dart';
+import 'package:mybeachbook/screens/add_beach_screen.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:fuuuuck/services/api/inaturalist_service.dart';
-import 'package:fuuuuck/util/metric_ranges.dart';
-import 'package:fuuuuck/services/gemini_service.dart';
-import 'package:fuuuuck/util/long_press_descriptions.dart';
-import 'package:fuuuuck/widgets/fullscreen_image_viewer.dart';
-import 'package:fuuuuck/main.dart';
+import 'package:mybeachbook/services/api/inaturalist_service.dart';
+import 'package:mybeachbook/util/metric_ranges.dart';
+import 'package:mybeachbook/services/gemini_service.dart';
+import 'package:mybeachbook/util/long_press_descriptions.dart';
+import 'package:mybeachbook/widgets/fullscreen_image_viewer.dart';
+import 'package:mybeachbook/main.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;

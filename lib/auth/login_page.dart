@@ -1,8 +1,8 @@
 // lib/auth/login_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/main.dart';
+import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/main.dart';
 
 class LoginPage extends StatefulWidget {
   final VoidCallback? onRegisterTap;

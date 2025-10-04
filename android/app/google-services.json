@@ -176,6 +176,45 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:773169716410:android:7da71b808b0eac5ce43683",
+        "android_client_info": {
+          "package_name": "com.ziehro.mybeachbook"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "773169716410-4kemuqcua4kcbn208fin5l6i343kbr3a.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBu_8OJxojdL1DjsEuBJNTBT6KWBobmi7g"
+        },
+        {
+          "current_key": "AIzaSyBFtWFj4LQ4wSOVrLGU8b6nl41QnycgxnM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "773169716410-1cguq916ubfompm88cb7ujnq6hqghv0r.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "773169716410-0ucfm602vi5mqmpajg2usg7u37fvrne7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.ziehro.beachLocator.RunnerTests"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"

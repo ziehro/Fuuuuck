@@ -5,15 +5,15 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
-import 'package:fuuuuck/models/beach_model.dart';
-import 'package:fuuuuck/models/contribution_model.dart';
+import 'package:mybeachbook/models/beach_model.dart';
+import 'package:mybeachbook/models/contribution_model.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dart_openai/dart_openai.dart';
 
-import 'package:fuuuuck/services/api/secrets.dart'; // openAIApiKey
+import 'package:mybeachbook/services/api/secrets.dart'; // openAIApiKey
 
 class BeachDataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

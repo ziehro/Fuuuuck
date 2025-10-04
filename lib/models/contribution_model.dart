@@ -1,6 +1,6 @@
 // lib/models/contribution_model.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fuuuuck/models/confirmed_identification.dart'; // Import the new model
+import 'package:mybeachbook/models/confirmed_identification.dart'; // Import the new model
 
 class Contribution {
   final String? id; // Document ID, nullable when creating a new one

@@ -7,7 +7,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:fuuuuck/main.dart'; // This imports your RootApp
+import 'package:mybeachbook/main.dart'; // This imports your RootApp
 
 
 void main() {

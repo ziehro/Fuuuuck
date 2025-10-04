@@ -1,8 +1,8 @@
 // lib/widgets/add_beach/form_field_widget.dart
 import 'package:flutter/material.dart';
-import 'package:fuuuuck/models/form_data_model.dart';
-import 'package:fuuuuck/services/gemini_service.dart';
-import 'package:fuuuuck/util/long_press_descriptions.dart';
+import 'package:mybeachbook/models/form_data_model.dart';
+import 'package:mybeachbook/services/gemini_service.dart';
+import 'package:mybeachbook/util/long_press_descriptions.dart';
 
 class FormFieldWidget extends StatefulWidget {
   final FormFieldData field;

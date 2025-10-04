@@ -66,7 +66,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'beachbook-163923.appspot.com',
     androidClientId: '773169716410-h173k2osuv20nmnmhtoh2cs64sqfv2c1.apps.googleusercontent.com',
     iosClientId: '773169716410-du7ei7t0ktgu7ov5ket0ggbo73a5bnmg.apps.googleusercontent.com',
-    iosBundleId: 'com.example.beachlens',
+    iosBundleId: 'com.example.mybeachbook',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -77,7 +77,7 @@ class DefaultFirebaseOptions {
     storageBucket: 'beachbook-163923.appspot.com',
     androidClientId: '773169716410-h173k2osuv20nmnmhtoh2cs64sqfv2c1.apps.googleusercontent.com',
     iosClientId: '773169716410-du7ei7t0ktgu7ov5ket0ggbo73a5bnmg.apps.googleusercontent.com',
-    iosBundleId: 'com.example.beachlens',
+    iosBundleId: 'com.example.mybeachbook',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

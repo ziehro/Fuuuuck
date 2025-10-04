@@ -1,7 +1,7 @@
 // lib/screens/migration_screen.dart
 import 'package:flutter/material.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:fuuuuck/services/migration_service.dart';
+import 'package:mybeachbook/services/migration_service.dart';
 
 class MigrationScreen extends StatefulWidget {
   const MigrationScreen({super.key});

@@ -6,15 +6,15 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:math' as math;
-import 'package:fuuuuck/main.dart';
+import 'package:mybeachbook/main.dart';
 
-import 'package:fuuuuck/services/beach_data_service.dart';
-import 'package:fuuuuck/services/settings_service.dart';
-import 'package:fuuuuck/models/beach_model.dart';
-import 'package:fuuuuck/screens/add_beach_screen.dart';
-import 'package:fuuuuck/screens/beach_detail_screen.dart';
-import 'package:fuuuuck/screens/migration_screen.dart';
-import 'package:fuuuuck/util/metric_ranges.dart';
+import 'package:mybeachbook/services/beach_data_service.dart';
+import 'package:mybeachbook/services/settings_service.dart';
+import 'package:mybeachbook/models/beach_model.dart';
+import 'package:mybeachbook/screens/add_beach_screen.dart';
+import 'package:mybeachbook/screens/beach_detail_screen.dart';
+import 'package:mybeachbook/screens/migration_screen.dart';
+import 'package:mybeachbook/util/metric_ranges.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});

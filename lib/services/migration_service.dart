@@ -2,10 +2,10 @@
 import 'dart:convert';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fuuuuck/models/beach_model.dart';
-import 'package:fuuuuck/models/contribution_model.dart';
-import 'package:fuuuuck/models/confirmed_identification.dart';
-import 'package:fuuuuck/services/gemini_service.dart';
+import 'package:mybeachbook/models/beach_model.dart';
+import 'package:mybeachbook/models/contribution_model.dart';
+import 'package:mybeachbook/models/confirmed_identification.dart';
+import 'package:mybeachbook/services/gemini_service.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 
 class MigrationService {

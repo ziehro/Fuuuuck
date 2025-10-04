@@ -4,8 +4,8 @@ import 'package:camera/camera.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dart:io';
 import 'package:path/path.dart' show join;
-import 'package:fuuuuck/services/api/inaturalist_service.dart';
-import 'package:fuuuuck/models/confirmed_identification.dart';
+import 'package:mybeachbook/services/api/inaturalist_service.dart';
+import 'package:mybeachbook/models/confirmed_identification.dart';
 
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});

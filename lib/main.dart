@@ -6,13 +6,13 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fuuuuck/services/sync_service.dart';
+import 'package:mybeachbook/services/sync_service.dart';
 
-import 'package:fuuuuck/firebase_options.dart';
-import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/services/settings_service.dart';
-import 'package:fuuuuck/auth/auth_gate.dart';
-import 'package:fuuuuck/services/beach_data_service.dart';
+import 'package:mybeachbook/firebase_options.dart';
+import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/services/settings_service.dart';
+import 'package:mybeachbook/auth/auth_gate.dart';
+import 'package:mybeachbook/services/beach_data_service.dart';
 
 // 🏖️ BEACHY THEME COLORS
 const Color oceanBlue = Color(0xFF0077BE);        // Deep ocean blue

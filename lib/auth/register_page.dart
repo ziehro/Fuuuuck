@@ -1,8 +1,8 @@
 // lib/auth/register_page.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/main.dart';
+import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/main.dart';
 
 // Import the beachy theme colors
 // These are already defined in main.dart, so we just reference them

@@ -2,15 +2,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
-import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/auth/login_page.dart';
-import 'package:fuuuuck/auth/register_page.dart';
+import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/auth/login_page.dart';
+import 'package:mybeachbook/auth/register_page.dart';
 
 // Placeholder imports for your screens (ensure these paths are correct)
-import 'package:fuuuuck/screens/scanner_screen.dart';
-import 'package:fuuuuck/screens/map_screen.dart';
-import 'package:fuuuuck/screens/add_beach_screen.dart';
-import 'package:fuuuuck/screens/settings_screen.dart';
+import 'package:mybeachbook/screens/scanner_screen.dart';
+import 'package:mybeachbook/screens/map_screen.dart';
+import 'package:mybeachbook/screens/add_beach_screen.dart';
+import 'package:mybeachbook/screens/settings_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});

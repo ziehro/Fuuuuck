@@ -4,10 +4,10 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/services/settings_service.dart';
-import 'package:fuuuuck/services/sync_service.dart';
-import 'package:fuuuuck/main.dart';
+import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/services/settings_service.dart';
+import 'package:mybeachbook/services/sync_service.dart';
+import 'package:mybeachbook/main.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});

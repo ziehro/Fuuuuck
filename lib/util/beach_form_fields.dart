@@ -1,5 +1,5 @@
 // lib/util/beach_form_fields.dart
-import 'package:fuuuuck/models/form_data_model.dart';
+import 'package:mybeachbook/models/form_data_model.dart';
 
 final List<FormFieldData> beachFormFields = [
   // Flora

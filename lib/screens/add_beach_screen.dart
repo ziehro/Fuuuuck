@@ -5,22 +5,22 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:fuuuuck/services/gemini_service.dart';
+import 'package:mybeachbook/services/gemini_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:dart_geohash/dart_geohash.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter/services.dart';
 
-import 'package:fuuuuck/services/beach_data_service.dart';
-import 'package:fuuuuck/services/auth_service.dart';
-import 'package:fuuuuck/models/beach_model.dart';
-import 'package:fuuuuck/models/contribution_model.dart';
-import 'package:fuuuuck/models/confirmed_identification.dart';
-import 'package:fuuuuck/screens/scanner_screen.dart';
-import 'package:fuuuuck/util/beach_form_fields.dart';
-import 'package:fuuuuck/models/form_data_model.dart';
-import 'package:fuuuuck/widgets/add_beach/dynamic_form_page.dart';
+import 'package:mybeachbook/services/beach_data_service.dart';
+import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/models/beach_model.dart';
+import 'package:mybeachbook/models/contribution_model.dart';
+import 'package:mybeachbook/models/confirmed_identification.dart';
+import 'package:mybeachbook/screens/scanner_screen.dart';
+import 'package:mybeachbook/util/beach_form_fields.dart';
+import 'package:mybeachbook/models/form_data_model.dart';
+import 'package:mybeachbook/widgets/add_beach/dynamic_form_page.dart';
 
 class AddBeachScreen extends StatefulWidget {
   final LatLng? initialLocation;

@@ -14,7 +14,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:fuuuuck/services/api/secrets.dart';
+import 'package:mybeachbook/services/api/secrets.dart';
 
 class GeminiService {
   static const String _uploadFolder = 'beach_images';
