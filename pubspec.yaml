@@ -2,7 +2,7 @@ name: mybeachbook
 description: A real-time beach object recognition and data logging app.
 publish_to: 'none'
 
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: '^3.4.0' # Using the modern caret (^) syntax as required.
@@ -59,8 +59,8 @@ flutter:
     - assets/
 
 flutter_native_splash:
-  color: "#8B4513" # Your primary arbutus brown for the overall splash background
-  image: assets/splash_icon.png # The image to display on the splash screen
+  color: "#F4E4C1"
+  image: assets/app_icon.png # The image to display on the splash screen
   android: true
   ios: true # Keep iOS true for when you set it up, otherwise set to false
   web: false
@@ -71,7 +71,7 @@ flutter_native_splash:
     # This image will be the icon on the splash screen for Android 12+.
     # It gets clipped to a circle automatically. Make sure your icon
     # looks good centered and within a circle.
-    image: assets/splash_icon.png
+    image: assets/app_icon.png
     # This is the background color *behind* your splash icon on Android 12+.
     # Choose a color that contrasts with your icon. arbutusCream is a good choice.
     icon_background_color: "#F5F5DC" # arbutusCream
