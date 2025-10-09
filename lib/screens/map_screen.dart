@@ -386,9 +386,9 @@ class MapScreenState extends State<MapScreen> {
         // Legend (only when a layer is active)
         if (_activeMetricKey != null)
           Positioned(
-            left: 16,
+            left: 88,
             right: 88, // Leave space for FAB (56px) + margin (32px)
-            bottom: 16 + MediaQuery.of(context).padding.bottom,
+            bottom: 22 + MediaQuery.of(context).padding.bottom,
             child: _LegendBar(label: _activeMetricKey!),
           ),
 
@@ -471,8 +471,8 @@ class MapScreenState extends State<MapScreen> {
 
         // Map Style Switcher Button (positioned to not overlap "my location" button)
         Positioned(
-          bottom: _selectedBeach != null ? 220 : 120, // Above FAB and beach card
-          right: 10,
+          top: 8,
+          left: 8,
           child: FloatingActionButton.small(
             heroTag: 'mapStyleButton',
             backgroundColor: Colors.white,
@@ -582,14 +582,15 @@ class _LegendBar extends StatelessWidget {
     return Card(
       elevation: 3,
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.all(8.0), // CHANGED from 12.0 to 8.0
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min, // ADD this to minimize height
           children: [
-            Text(label, style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(height: 8),
+            Text(label, style: Theme.of(context).textTheme.labelMedium), // CHANGED from labelLarge to labelMedium
+            const SizedBox(height: 4), // CHANGED from 8 to 4
             Container(
-              height: 12,
+              height: 8, // CHANGED from 12 to 8
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -599,13 +600,16 @@ class _LegendBar extends StatelessWidget {
                     Color(0xFFF44336), // very high
                   ],
                 ),
-                borderRadius: BorderRadius.all(Radius.circular(6)),
+                borderRadius: BorderRadius.all(Radius.circular(4)),
               ),
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 2), // CHANGED from 4 to 2
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [Text('low'), Text('high')],
+              children: const [
+                Text('low', style: TextStyle(fontSize: 10)), // ADD explicit small font size
+                Text('high', style: TextStyle(fontSize: 10)),
+              ],
             ),
           ],
         ),

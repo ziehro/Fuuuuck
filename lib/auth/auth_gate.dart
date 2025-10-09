@@ -248,18 +248,17 @@ class _MyAppContentState extends State<MyAppContent> {
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Icon(Icons.map), // Map icon for MapScreen
+            icon: Icon(Icons.map),
             label: 'Map',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.camera_alt), // Camera icon for ScannerScreen
+            icon: Icon(Icons.camera_alt),
             label: 'Scan',
           ),
         ],
         currentIndex: _selectedIndex,
         onTap: _onItemTapped,
       ),
-      // Show FAB only on Map tab
       floatingActionButton: _selectedIndex == 0
           ? FloatingActionButton(
         onPressed: () {
@@ -272,6 +271,23 @@ class _MyAppContentState extends State<MyAppContent> {
         child: const Icon(Icons.add_location_alt),
       )
           : null,
+      // Bottom left, moved up 15 pixels
+      floatingActionButtonLocation: _selectedIndex == 0
+          ? CustomFabLocation(FloatingActionButtonLocation.startFloat, 15.0)
+          : FloatingActionButtonLocation.endFloat,
     );
+  }
+
+}
+class CustomFabLocation extends FloatingActionButtonLocation {
+  final FloatingActionButtonLocation location;
+  final double offsetY;
+
+  const CustomFabLocation(this.location, this.offsetY);
+
+  @override
+  Offset getOffset(ScaffoldPrelayoutGeometry scaffoldGeometry) {
+    final Offset offset = location.getOffset(scaffoldGeometry);
+    return Offset(offset.dx, offset.dy - offsetY);
   }
 }

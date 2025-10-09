@@ -7,6 +7,8 @@ import 'package:path/path.dart' show join;
 import 'package:mybeachbook/services/api/inaturalist_service.dart';
 import 'package:mybeachbook/models/confirmed_identification.dart';
 
+import '../services/api/mlkit_service.dart';
+
 class ScannerScreen extends StatefulWidget {
   const ScannerScreen({super.key});
 
@@ -95,8 +97,8 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
       setState(() => _imagePath = path);
 
-      final inatService = INaturalistService();
-      final results = await inatService.identifyImage(File(path));
+      final mlkitService = MLKitService();
+      final results = await mlkitService.identifyImage(File(path));
       setState(() {
         _identificationResults = results;
         if (results.isEmpty) _showSnackBar('No identification results found.');
@@ -289,7 +291,7 @@ class _ScannerScreenState extends State<ScannerScreen> {
           padding: const EdgeInsets.all(12.0),
           child: Column(
             children: [
-              Text('Confirm Identified Species:', style: Theme.of(context).textTheme.titleMedium),
+              Text('Confirm Identified Item:', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               Expanded(
                 child: ListView.builder(
