@@ -1,10 +1,13 @@
 // lib/services/beach_data_service.dart
+// UPDATED VERSION with moderation support
+
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:mybeachbook/models/beach_model.dart';
 import 'package:mybeachbook/models/contribution_model.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -13,14 +16,18 @@ import 'package:dart_geohash/dart_geohash.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:dart_openai/dart_openai.dart';
 
-import 'package:mybeachbook/services/api/secrets.dart'; // openAIApiKey
+import 'package:mybeachbook/services/api/secrets.dart';
 
 class BeachDataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final Uuid _uuid = const Uuid();
 
-  // === New: upload user + AI image to the same Storage folder using putFile ===
+  // === MODERATION SETTINGS ===
+  // Set this to true to require approval for all new beaches and contributions
+  static const bool requireModeration = true;
+
+  // === Upload user + AI image ===
   Future<Map<String, String>> uploadUserAndAiImages({
     required String beachId,
     required File userImageFile,
@@ -41,28 +48,23 @@ class BeachDataService {
       prompt: aiPrompt,
       n: 1,
       size: OpenAIImageSize.size1024,
-      // NOTE: no responseFormat here – some server versions reject it
     );
 
-// Get the image URL from OpenAI
     final openAiUrl = result.data.first.url;
     if (openAiUrl == null || openAiUrl.isEmpty) {
       throw Exception('OpenAI returned no image URL.');
     }
 
-// Download the image to bytes
     final resp = await http.get(Uri.parse(openAiUrl));
     if (resp.statusCode != 200) {
       throw Exception('Failed to download OpenAI image: HTTP ${resp.statusCode}');
     }
     final bytes = resp.bodyBytes;
 
-// Write to a temp file
     final dir = await getTemporaryDirectory();
     final aiFile = File('${dir.path}/ai_${_uuid.v4()}.png');
     await aiFile.writeAsBytes(bytes, flush: true);
 
-// Upload with your existing putFile path (same folder as user photos)
     final aiUrl = await _uploadFileToBeachFolder(
       beachId: beachId,
       file: aiFile,
@@ -100,20 +102,44 @@ class BeachDataService {
     return imageUrls;
   }
 
+  /// Add a new beach - will go to pending_beaches if moderation is enabled
   Future<String?> addBeach({
     required Beach initialBeach,
     required Contribution initialContribution,
   }) async {
     try {
-      final DocumentReference beachDocRef = await _firestore.collection('beaches').add(initialBeach.toMap());
-      await beachDocRef.collection('contributions').add(initialContribution.toMap());
-      return beachDocRef.id;
+      if (requireModeration) {
+        // Submit to pending_beaches collection for approval
+        final currentUser = FirebaseAuth.instance.currentUser;
+
+        final pendingBeachData = initialBeach.toMap();
+        pendingBeachData['submittedBy'] = currentUser?.email ?? 'anonymous';
+        pendingBeachData['submittedAt'] = Timestamp.now();
+        pendingBeachData['initialContribution'] = initialContribution.toMap();
+
+        final pendingBeachRef = await _firestore
+            .collection('pending_beaches')
+            .add(pendingBeachData);
+
+        print('✅ Beach submitted for approval: ${pendingBeachRef.id}');
+        return pendingBeachRef.id;
+      } else {
+        // Original behavior - add directly to beaches
+        final DocumentReference beachDocRef = await _firestore
+            .collection('beaches')
+            .add(initialBeach.toMap());
+        await beachDocRef
+            .collection('contributions')
+            .add(initialContribution.toMap());
+        return beachDocRef.id;
+      }
     } catch (e) {
       print('Error adding new beach: $e');
       return null;
     }
   }
 
+  /// Add a contribution to an existing beach - will go to pending_contributions if moderation is enabled
   Future<void> addContribution({
     required String beachId,
     required Contribution contribution,
@@ -134,13 +160,24 @@ class BeachDataService {
 
       final beach = Beach.fromFirestore(beachSnapshot);
       final geoHasher = GeoHasher();
-      final userGeohash = geoHasher.encode(userLongitude, userLatitude, precision: 9); // (lat, lon)
+      final userGeohash = geoHasher.encode(userLongitude, userLatitude, precision: 9);
 
       if (userGeohash != beach.geohash) {
         throw Exception('You must be at the beach to make a contribution.');
       }
 
-      await beachDocRef.collection('contributions').add(contribution.toMap());
+      if (requireModeration) {
+        // Submit to pending_contributions for approval
+        await beachDocRef
+            .collection('pending_contributions')
+            .add(contribution.toMap());
+        print('✅ Contribution submitted for approval');
+      } else {
+        // Original behavior - add directly
+        await beachDocRef
+            .collection('contributions')
+            .add(contribution.toMap());
+      }
     } catch (e) {
       print('Error adding contribution: $e');
       rethrow;
@@ -148,7 +185,8 @@ class BeachDataService {
   }
 
   Stream<List<Beach>> getBeachesNearby({required LatLngBounds bounds}) {
-    Query query = _firestore.collection('beaches')
+    Query query = _firestore
+        .collection('beaches')
         .where('latitude', isGreaterThan: bounds.southwest.latitude)
         .where('latitude', isLessThan: bounds.northeast.latitude);
 
@@ -164,7 +202,10 @@ class BeachDataService {
 
   Future<Beach?> getBeachById(String beachId) async {
     try {
-      final DocumentSnapshot doc = await _firestore.collection('beaches').doc(beachId).get();
+      final DocumentSnapshot doc = await _firestore
+          .collection('beaches')
+          .doc(beachId)
+          .get();
       if (doc.exists) {
         return Beach.fromFirestore(doc);
       }
@@ -184,7 +225,7 @@ class BeachDataService {
     required String label,
   }) async {
     final ts = DateTime.now().millisecondsSinceEpoch;
-    final path = 'beach_images/${ts}_${label}_${_uuid.v4()}.$ext'; // same folder/pattern as user flow
+    final path = 'beach_images/${ts}_${label}_${_uuid.v4()}.$ext';
     final ref = _storage.ref().child(path);
     final metadata = SettableMetadata(
       contentType: _contentTypeForExt(ext),

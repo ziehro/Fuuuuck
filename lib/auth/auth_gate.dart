@@ -1,8 +1,11 @@
 // lib/auth/auth_gate.dart
+// UPDATED VERSION - Add notification badge for admin
+
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:mybeachbook/services/auth_service.dart';
+import 'package:mybeachbook/services/notification_service.dart'; // ADD THIS
 import 'package:mybeachbook/auth/login_page.dart';
 import 'package:mybeachbook/auth/register_page.dart';
 
@@ -11,6 +14,7 @@ import 'package:mybeachbook/screens/scanner_screen.dart';
 import 'package:mybeachbook/screens/map_screen.dart';
 import 'package:mybeachbook/screens/add_beach_screen.dart';
 import 'package:mybeachbook/screens/settings_screen.dart';
+import 'package:mybeachbook/screens/moderation_screen.dart'; // ADD THIS
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -23,6 +27,11 @@ class _AuthGateState extends State<AuthGate> {
   // Local state to manage showing login or register page
   bool showLoginPage = true;
 
+  // Admin user IDs - REPLACE WITH YOUR ACTUAL UID
+  static const List<String> _adminUserIds = [
+    'YOUR_ADMIN_USER_ID_HERE', // REPLACE THIS
+  ];
+
   void togglePages() {
     setState(() {
       showLoginPage = !showLoginPage;
@@ -32,6 +41,7 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
+    final notificationService = Provider.of<NotificationService>(context); // ADD THIS
 
     // Listen to authentication state changes
     return StreamBuilder<User?>(
@@ -48,7 +58,22 @@ class _AuthGateState extends State<AuthGate> {
 
         // User is logged in
         if (snapshot.hasData) {
-          return const MyAppContent(); // Your main app content (the Scaffold with tabs)
+          final user = snapshot.data!;
+          final isAdmin = _adminUserIds.contains(user.uid);
+
+          // Start notification service for admin users
+          if (isAdmin) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              notificationService.startListening();
+            });
+          } else {
+            // Stop listening if not admin
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              notificationService.stopListening();
+            });
+          }
+
+          return MyAppContent(isAdmin: isAdmin);
         }
 
         // User is NOT logged in, show auth pages
@@ -64,7 +89,9 @@ class _AuthGateState extends State<AuthGate> {
 
 // Extracted MyApp's Scaffold content into a separate widget
 class MyAppContent extends StatefulWidget {
-  const MyAppContent({super.key});
+  final bool isAdmin;
+
+  const MyAppContent({super.key, required this.isAdmin});
 
   @override
   State<MyAppContent> createState() => _MyAppContentState();
@@ -77,15 +104,14 @@ class _MyAppContentState extends State<MyAppContent> {
   final GlobalKey<MapScreenState> _mapScreenKey = GlobalKey<MapScreenState>();
 
   // List of widgets for each tab
-  // Make sure the order here matches the BottomNavigationBarItem order
   late final List<Widget> _widgetOptions;
 
   @override
   void initState() {
     super.initState();
     _widgetOptions = <Widget>[
-      MapScreen(key: _mapScreenKey),     // MAP is now the first tab
-      const ScannerScreen(), // Scanner is the second tab
+      MapScreen(key: _mapScreenKey),
+      const ScannerScreen(),
     ];
   }
 
@@ -131,8 +157,12 @@ class _MyAppContentState extends State<MyAppContent> {
 
     if (shouldSignOut == true) {
       final authService = Provider.of<AuthService>(context, listen: false);
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
+
+      // Stop notification service when signing out
+      notificationService.stopListening();
+
       await authService.signOut();
-      // No need to navigate manually, AuthGate will automatically redirect
     }
   }
 
@@ -153,7 +183,7 @@ class _MyAppContentState extends State<MyAppContent> {
         ),
       );
 
-      // Layers menu (pick a metric from the bar)
+      // Layers menu
       actions.add(
         PopupMenuButton<String?>(
           tooltip: 'Heatmap layer',
@@ -191,7 +221,12 @@ class _MyAppContentState extends State<MyAppContent> {
       );
     }
 
-    // Menu button with Settings and Sign Out (always visible on all tabs)
+    // NOTIFICATION BADGE FOR ADMIN (show on all screens)
+    if (widget.isAdmin) {
+      actions.add(_buildNotificationBadge());
+    }
+
+    // Menu button with Settings and Sign Out (always visible)
     actions.add(
       PopupMenuButton<String>(
         icon: const Icon(Icons.more_vert),
@@ -235,6 +270,58 @@ class _MyAppContentState extends State<MyAppContent> {
     return actions;
   }
 
+  // NEW: Build notification badge for admin
+  Widget _buildNotificationBadge() {
+    return Consumer<NotificationService>(
+      builder: (context, notificationService, child) {
+        final count = notificationService.totalPendingCount;
+
+        return Stack(
+          children: [
+            IconButton(
+              icon: const Icon(Icons.notifications),
+              tooltip: 'Moderation Queue',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ModerationScreen(),
+                  ),
+                );
+              },
+            ),
+            if (count > 0)
+              Positioned(
+                right: 8,
+                top: 8,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Text(
+                    count > 99 ? '99+' : count.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -263,22 +350,21 @@ class _MyAppContentState extends State<MyAppContent> {
           ? FloatingActionButton(
         onPressed: () {
           Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddBeachScreen())
+            context,
+            MaterialPageRoute(builder: (_) => const AddBeachScreen()),
           );
         },
         tooltip: 'Add New Beach',
         child: const Icon(Icons.add_location_alt),
       )
           : null,
-      // Bottom left, moved up 15 pixels
       floatingActionButtonLocation: _selectedIndex == 0
           ? CustomFabLocation(FloatingActionButtonLocation.startFloat, 15.0)
           : FloatingActionButtonLocation.endFloat,
     );
   }
-
 }
+
 class CustomFabLocation extends FloatingActionButtonLocation {
   final FloatingActionButtonLocation location;
   final double offsetY;

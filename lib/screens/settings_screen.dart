@@ -8,6 +8,11 @@ import 'package:mybeachbook/services/auth_service.dart';
 import 'package:mybeachbook/services/settings_service.dart';
 import 'package:mybeachbook/services/sync_service.dart';
 import 'package:mybeachbook/main.dart';
+import 'package:mybeachbook/screens/moderation_screen.dart';
+import 'package:mybeachbook/services/moderation_service.dart';
+
+import '../services/notification_service.dart';
+
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -265,7 +270,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ],
             ),
           ),
-
+          _buildModerationSection(),
           const SizedBox(height: 32),
         ],
       ),
@@ -719,4 +724,118 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     }
   }
+
+  // Add this to your existing lib/screens/settings_screen.dart
+// This replaces the _buildModerationSection() method
+
+  Widget _buildModerationSection() {
+    // Only show for admin users
+    final adminUserIds = ['c4So8SbUIpYPsV0bF0aaAtyWj9q1']; // Replace with your Firebase Auth UID
+    final currentUser = FirebaseAuth.instance.currentUser;
+
+    if (currentUser == null || !adminUserIds.contains(currentUser.uid)) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        _buildSectionHeader('Admin'),
+        Card(
+          child: Column(
+            children: [
+              // Use Consumer to get live updates
+              Consumer<NotificationService>(
+                builder: (context, notificationService, child) {
+                  final beachesCount = notificationService.pendingBeachesCount;
+                  final contributionsCount = notificationService.pendingContributionsCount;
+                  final totalCount = notificationService.totalPendingCount;
+
+                  return ListTile(
+                    leading: Stack(
+                      children: [
+                        const Icon(Icons.admin_panel_settings, color: seafoamGreen),
+                        if (totalCount > 0)
+                          Positioned(
+                            right: 0,
+                            top: 0,
+                            child: Container(
+                              padding: const EdgeInsets.all(4),
+                              decoration: BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1),
+                              ),
+                              constraints: const BoxConstraints(
+                                minWidth: 16,
+                                minHeight: 16,
+                              ),
+                              child: Text(
+                                totalCount > 9 ? '9+' : totalCount.toString(),
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 8,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    title: const Text('Moderation Queue'),
+                    subtitle: totalCount == 0
+                        ? const Text(
+                      'No pending items',
+                      style: TextStyle(color: Colors.green),
+                    )
+                        : Text(
+                      '$totalCount pending ($beachesCount beaches, $contributionsCount contributions)',
+                      style: const TextStyle(
+                        color: Colors.orange,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (totalCount > 0)
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              totalCount.toString(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        const SizedBox(width: 8),
+                        const Icon(Icons.arrow_forward_ios),
+                      ],
+                    ),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ModerationScreen(),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
 }

@@ -434,7 +434,7 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     userLatitude: _currentLocation!.latitude,
     userLongitude: _currentLocation!.longitude,
     );
-    _showSnackBar('Contribution added successfully!');
+    _showSnackBar('Contribution submitted for approval!');
     } else {
     _showSnackBar('Generating AI description...');
     final String aiDescription =
@@ -479,7 +479,7 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     initialBeach: initialBeach,
     initialContribution: contribution,
     );
-    _showSnackBar('Beach saved successfully!');
+    _showSnackBar('Beach submitted for approval!');
     }
 
     if (mounted) Navigator.pop(context);

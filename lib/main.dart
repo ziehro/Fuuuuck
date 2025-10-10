@@ -1,4 +1,6 @@
 // lib/main.dart
+// UPDATED VERSION - Add NotificationService provider
+
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -11,18 +13,19 @@ import 'package:mybeachbook/services/sync_service.dart';
 import 'package:mybeachbook/firebase_options.dart';
 import 'package:mybeachbook/services/auth_service.dart';
 import 'package:mybeachbook/services/settings_service.dart';
+import 'package:mybeachbook/services/notification_service.dart'; // ADD THIS
 import 'package:mybeachbook/auth/auth_gate.dart';
 import 'package:mybeachbook/services/beach_data_service.dart';
 
 // 🏖️ BEACHY THEME COLORS
-const Color oceanBlue = Color(0xFF0077BE);        // Deep ocean blue
-const Color skyBlue = Color(0xFF87CEEB);          // Sky blue
-const Color sandBeige = Color(0xFFF4E4C1);        // Sandy beige
-const Color seafoamGreen = Color(0xFF7FCDCD);     // Seafoam green/teal
-const Color sunsetOrange = Color(0xFFFF8C42);     // Sunset orange
-const Color coralPink = Color(0xFFFF6B9D);        // Coral pink
-const Color driftwood = Color(0xFFB8956A);        // Driftwood brown
-const Color waveWhite = Color(0xFFFFFFF0);        // Off-white (wave foam)
+const Color oceanBlue = Color(0xFF0077BE);
+const Color skyBlue = Color(0xFF87CEEB);
+const Color sandBeige = Color(0xFFF4E4C1);
+const Color seafoamGreen = Color(0xFF7FCDCD);
+const Color sunsetOrange = Color(0xFFFF8C42);
+const Color coralPink = Color(0xFFFF6B9D);
+const Color driftwood = Color(0xFFB8956A);
+const Color waveWhite = Color(0xFFFFFFF0);
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -49,6 +52,7 @@ void main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => AuthService()),
         ChangeNotifierProvider(create: (context) => SettingsService()),
+        ChangeNotifierProvider(create: (context) => NotificationService()), // ADD THIS
         Provider<BeachDataService>(create: (context) => BeachDataService()),
       ],
       child: const RootApp(),
@@ -56,6 +60,7 @@ void main() async {
   );
 }
 
+// Rest of the file stays the same...
 class RootApp extends StatelessWidget {
   const RootApp({super.key});
 

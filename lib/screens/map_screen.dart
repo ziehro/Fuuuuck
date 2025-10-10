@@ -1,4 +1,6 @@
 // lib/screens/map_screen.dart
+// FIXED VERSION - Added mounted checks to prevent setState after dispose
+
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -22,18 +24,12 @@ class MapScreen extends StatefulWidget {
   @override
   State<MapScreen> createState() => MapScreenState();
 
-  // Static method to get metric keys for the AppBar menu
   static Set<String> getMetricKeys() => _metricKeys;
 
-  // Metric keys to offer as layers
   static const Set<String> _metricKeys = {
-    // Composition
     'Sand','Pebbles','Rocks','Boulders','Stone','Mud','Coal','Midden',
-    // Flora
     'Kelp Beach','Seaweed Beach','Seaweed Rocks',
-    // Driftwood
     'Kindling','Firewood','Logs','Trees',
-    // Fauna
     'Anemones','Barnacles','Bugs','Clams','Limpets','Mussels','Oysters','Snails','Turtles',
   };
 }
@@ -48,28 +44,25 @@ class MapScreenState extends State<MapScreen> {
   LatLng? _lastMapCenter;
   LatLngBounds? _currentBounds;
 
-  // Layering
-  String? _activeMetricKey; // null => no layer
+  String? _activeMetricKey;
   bool _showMarkers = true;
 
-  // Circle "heatmap" with beach references
   final Set<Circle> _heatCircles = {};
-  final Map<String, Beach> _circleToBeachMap = {}; // Maps circle ID to beach
+  final Map<String, Beach> _circleToBeachMap = {};
 
-  // Current zoom level for circle sizing
   double _currentZoom = 10.0;
 
-  // Public methods that can be called from AppBar
   void toggleMarkers() {
+    if (!mounted) return;
     setState(() {
       _showMarkers = !_showMarkers;
     });
   }
 
   void setActiveMetric(String? key) {
+    if (!mounted) return;
     setState(() {
       _activeMetricKey = key;
-      // Auto-hide markers when a layer is active
       if (key != null) {
         _showMarkers = false;
       }
@@ -79,9 +72,9 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void clearHeatmap() {
+    if (!mounted) return;
     setState(() {
       _activeMetricKey = null;
-      // Restore markers when clearing heatmap
       _showMarkers = true;
       _heatCircles.clear();
       _circleToBeachMap.clear();
@@ -99,20 +92,28 @@ class MapScreenState extends State<MapScreen> {
       final permission = await Permission.locationWhenInUse.request();
       if (!permission.isGranted) {
         _toast('Location permission is required to find nearby beaches.');
-        setState(() => _currentPosition = const LatLng(49.2827, -123.1207)); // Vancouver
+        if (mounted) {
+          setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
+        }
         return;
       }
       final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));
+      if (mounted) {
+        setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));
+      }
     } catch (e) {
       _toast('Failed to get current location: $e');
-      setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
+      if (mounted) {
+        setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
+      }
     }
   }
 
   Future<void> _loadBeachesForVisibleRegion() async {
-    if (_mapController == null) return;
+    if (_mapController == null || !mounted) return;
     final visibleBounds = await _safeVisibleRegion(_mapController!);
+    if (!mounted) return;
+
     final beachDataService = Provider.of<BeachDataService>(context, listen: false);
 
     setState(() {
@@ -141,6 +142,7 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onMapCreated(GoogleMapController controller) async {
+    if (!mounted) return;
     _mapController = controller;
     if (_currentPosition != null) {
       controller.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 10));
@@ -150,7 +152,6 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onCameraMove(CameraPosition position) {
-    // Track zoom level for circle sizing
     _currentZoom = position.zoom;
 
     if (_lastMapCenter == null) return;
@@ -159,7 +160,9 @@ class MapScreenState extends State<MapScreen> {
       position.target.latitude, position.target.longitude,
     );
     if (distance > 2000 && !_showSearchAreaButton) {
-      setState(() => _showSearchAreaButton = true);
+      if (mounted) {
+        setState(() => _showSearchAreaButton = true);
+      }
     }
   }
 
@@ -167,33 +170,31 @@ class MapScreenState extends State<MapScreen> {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBeachScreen()));
   }
 
-  // Handle taps on circles
   void _onCircleTap(String circleId) {
+    if (!mounted) return;
     final beach = _circleToBeachMap[circleId];
     if (beach != null) {
       setState(() => _selectedBeach = beach);
     }
   }
 
-  // Handle taps on the map (for deselecting)
   void _onMapTap(LatLng position) {
+    if (!mounted) return;
     setState(() => _selectedBeach = null);
   }
 
   @override
   void dispose() {
     _mapController?.dispose();
+    _mapController = null;
     super.dispose();
   }
 
-  // ---- Circle heatmap helpers ----
-
-  // Legend gradient colors (low -> high). Keep alpha 255; we apply alpha separately.
   static const List<Color> _grad = [
-    Color(0xFF00BCD4), // low (teal)
-    Color(0xFF8BC34A), // mid (green)
-    Color(0xFFFFC107), // high (amber)
-    Color(0xFFF44336), // very high (red)
+    Color(0xFF00BCD4),
+    Color(0xFF8BC34A),
+    Color(0xFFFFC107),
+    Color(0xFFF44336),
   ];
 
   Color _lerpColor(Color a, Color b, double t) {
@@ -205,7 +206,6 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Map 0..1 -> gradient color
   Color _colorFromNorm(double t, {int alpha = 110}) {
     t = t.clamp(0.0, 1.0);
     final pos = t * (_grad.length - 1);
@@ -218,31 +218,23 @@ class MapScreenState extends State<MapScreen> {
 
   double _lerp(double a, double b, double t) => a + (b - a) * t;
 
-  // Calculate radius based on zoom level for better visibility
   double _getRadiusForZoom(double baseRadius) {
-    // Zoom levels: 1 (world) to 20 (building)
-    // At zoom 5, circles should be very large
-    // At zoom 15, circles should be smaller
-
-    // Exponential scaling based on zoom
-    // Lower zoom (zoomed out) = larger circles
-    // Higher zoom (zoomed in) = smaller circles
-
     final zoomFactor = math.pow(1.5, (12 - _currentZoom)).toDouble();
     return (baseRadius * zoomFactor).clamp(100.0, 5000.0);
   }
 
   void _rebuildHeatCircles(List<Beach> beaches) {
+    if (!mounted) return;
+
     _heatCircles.clear();
     _circleToBeachMap.clear();
 
     final key = _activeMetricKey;
     if (key == null) {
-      setState(() {});
+      // Don't call setState here - just clear and return
       return;
     }
 
-    // Normalize by metricRanges if available, else by viewport values
     final range = metricRanges[key];
     double vMin, vMax;
     if (range != null) {
@@ -251,7 +243,7 @@ class MapScreenState extends State<MapScreen> {
     } else {
       final vals = beaches.map((b) => b.aggregatedMetrics[key]).whereType<double>().toList()..sort();
       if (vals.isEmpty) {
-        setState(() {});
+        // Don't call setState here either
         return;
       }
       vMin = vals.first;
@@ -259,7 +251,6 @@ class MapScreenState extends State<MapScreen> {
       if (vMax == vMin) vMax = vMin + 1.0;
     }
 
-    // Base circle sizing (meters) - will be adjusted by zoom
     const double minRadius = 200.0;
     const double maxRadius = 800.0;
 
@@ -270,10 +261,10 @@ class MapScreenState extends State<MapScreen> {
       final normLinear = ((v - vMin) / (vMax - vMin)).clamp(0.0, 1.0);
       final norm = normLinear;
 
-      if (norm <= 0.02) continue; // skip tiny values
+      if (norm <= 0.02) continue;
 
       final baseRadius = _lerp(minRadius, maxRadius, norm);
-      final radius = _getRadiusForZoom(baseRadius); // Adjust for zoom
+      final radius = _getRadiusForZoom(baseRadius);
       final color = _colorFromNorm(norm, alpha: 120);
 
       final circleId = '${b.id}::$key';
@@ -288,18 +279,16 @@ class MapScreenState extends State<MapScreen> {
           strokeWidth: 2,
           zIndex: 1,
           consumeTapEvents: true,
-          onTap: () => _onCircleTap(circleId), // Add tap callback
+          onTap: () => _onCircleTap(circleId),
         ),
       );
 
-      // Map circle ID to beach for tap handling
       _circleToBeachMap[circleId] = b;
     }
 
-    setState(() {});
+    // Don't call setState here - the circles will be used in the next build
   }
 
-  // Helper method to convert settings to MapType
   MapType _getMapType(String style) {
     switch (style) {
       case 'satellite':
@@ -334,14 +323,21 @@ class MapScreenState extends State<MapScreen> {
 
             final beaches = snapshot.data ?? [];
 
-            // Markers - respect settings for labels and only show when no heatmap is active
+            // Rebuild heat circles if we have an active metric
+            if (_activeMetricKey != null) {
+              _rebuildHeatCircles(beaches);
+            }
+
             final markers = _showMarkers && _activeMetricKey == null
                 ? beaches
                 .map((b) => Marker(
               markerId: MarkerId(b.id),
               position: LatLng(b.latitude, b.longitude),
-              onTap: () => setState(() => _selectedBeach = b),
-              // Show/hide info window based on settings
+              onTap: () {
+                if (mounted) {
+                  setState(() => _selectedBeach = b);
+                }
+              },
               infoWindow: settingsService.showMarkerLabels
                   ? InfoWindow(title: b.name)
                   : InfoWindow.noText,
@@ -349,7 +345,6 @@ class MapScreenState extends State<MapScreen> {
                 .toSet()
                 : <Marker>{};
 
-            // Rebuild circles when data, metric, or zoom changes
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _rebuildHeatCircles(beaches);
             });
@@ -357,37 +352,34 @@ class MapScreenState extends State<MapScreen> {
             return GoogleMap(
               initialCameraPosition: CameraPosition(
                 target: _currentPosition!,
-                zoom: settingsService.defaultZoomLevel, // Use settings zoom
+                zoom: settingsService.defaultZoomLevel,
               ),
               onMapCreated: _onMapCreated,
               onCameraMove: (pos) => _onCameraMove(pos),
               onCameraIdle: () async {
-                if (_mapController != null) {
+                if (_mapController != null && mounted) {
                   _currentBounds = await _safeVisibleRegion(_mapController!);
-                  // Rebuild circles on zoom change
-                  if (_activeMetricKey != null) {
+                  if (_activeMetricKey != null && mounted) {
                     final currentBeaches = beaches;
                     _rebuildHeatCircles(currentBeaches);
                   }
                 }
               },
-              onTap: _onMapTap, // Deselect on map tap
+              onTap: _onMapTap,
               markers: markers,
               circles: _heatCircles,
               myLocationEnabled: true,
               myLocationButtonEnabled: true,
               zoomControlsEnabled: false,
-              // Apply map style from settings
               mapType: _getMapType(settingsService.mapStyle),
             );
           },
         ),
 
-        // Legend (only when a layer is active)
         if (_activeMetricKey != null)
           Positioned(
             left: 88,
-            right: 88, // Leave space for FAB (56px) + margin (32px)
+            right: 88,
             bottom: 22 + MediaQuery.of(context).padding.bottom,
             child: _LegendBar(label: _activeMetricKey!),
           ),
@@ -450,7 +442,6 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // Adaptive "Search this area"
         if (_showSearchAreaButton)
           Positioned(
             top: 10,
@@ -469,7 +460,6 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // Map Style Switcher Button (positioned to not overlap "my location" button)
         Positioned(
           top: 8,
           left: 8,
@@ -488,7 +478,6 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  // Get icon for current map style
   IconData _getMapStyleIcon(String style) {
     switch (style) {
       case 'satellite':
@@ -503,7 +492,6 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  // Quick map style picker
   void _showQuickMapStylePicker(SettingsService settingsService) {
     showModalBottomSheet(
       context: context,
@@ -571,8 +559,6 @@ class MapScreenState extends State<MapScreen> {
   }
 }
 
-// ---- UI helpers -------------------------------------------------------------
-
 class _LegendBar extends StatelessWidget {
   final String label;
   const _LegendBar({required this.label});
@@ -582,32 +568,32 @@ class _LegendBar extends StatelessWidget {
     return Card(
       elevation: 3,
       child: Padding(
-        padding: const EdgeInsets.all(8.0), // CHANGED from 12.0 to 8.0
+        padding: const EdgeInsets.all(8.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min, // ADD this to minimize height
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Text(label, style: Theme.of(context).textTheme.labelMedium), // CHANGED from labelLarge to labelMedium
-            const SizedBox(height: 4), // CHANGED from 8 to 4
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: 4),
             Container(
-              height: 8, // CHANGED from 12 to 8
+              height: 8,
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
-                    Color(0xFF00BCD4), // low
-                    Color(0xFF8BC34A), // mid
-                    Color(0xFFFFC107), // high
-                    Color(0xFFF44336), // very high
+                    Color(0xFF00BCD4),
+                    Color(0xFF8BC34A),
+                    Color(0xFFFFC107),
+                    Color(0xFFF44336),
                   ],
                 ),
                 borderRadius: BorderRadius.all(Radius.circular(4)),
               ),
             ),
-            const SizedBox(height: 2), // CHANGED from 4 to 2
+            const SizedBox(height: 2),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
-                Text('low', style: TextStyle(fontSize: 10)), // ADD explicit small font size
+                Text('low', style: TextStyle(fontSize: 10)),
                 Text('high', style: TextStyle(fontSize: 10)),
               ],
             ),
