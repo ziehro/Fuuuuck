@@ -29,7 +29,7 @@ class _AuthGateState extends State<AuthGate> {
 
   // Admin user IDs - REPLACE WITH YOUR ACTUAL UID
   static const List<String> _adminUserIds = [
-    'YOUR_ADMIN_USER_ID_HERE', // REPLACE THIS
+    'c4So8SbUIpYPsV0bF0aaAtyWj9q1', // REPLACE THIS
   ];
 
   void togglePages() {

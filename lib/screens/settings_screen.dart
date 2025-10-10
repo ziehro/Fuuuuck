@@ -150,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     }
                   },
                 ),
-                SwitchListTile(
+                /*SwitchListTile(
                   secondary: const Icon(Icons.cloud_off, color: seafoamGreen),
                   title: const Text('Offline Mode'),
                   subtitle: const Text('Save data locally when offline'),
@@ -162,7 +162,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       HapticFeedback.lightImpact();
                     }
                   },
-                ),
+                ),*/
                 ListTile(
                   leading: const Icon(Icons.cloud_upload, color: seafoamGreen),
                   title: const Text('Force Sync Now'),
