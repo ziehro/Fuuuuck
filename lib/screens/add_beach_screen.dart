@@ -25,8 +25,10 @@ import 'package:mybeachbook/widgets/add_beach/dynamic_form_page.dart';
 class AddBeachScreen extends StatefulWidget {
   final LatLng? initialLocation;
   final String? beachId;
+  final List<ConfirmedIdentification>? initialIdentifications;
 
-  const AddBeachScreen({super.key, this.initialLocation, this.beachId});
+  const AddBeachScreen({super.key, this.initialLocation, this.beachId,
+    this.initialIdentifications,});
 
   @override
   State<AddBeachScreen> createState() => _AddBeachScreenState();
@@ -170,8 +172,17 @@ class _AddBeachScreenState extends State<AddBeachScreen>
   }
 
   void _initializeScreen() {
-    _countryController.text = 'Canada';
-    _provinceController.text = 'British Columbia';
+    // DON'T hardcode country/province anymore - let geocoding fill them in
+    // Only set defaults if geocoding fails
+
+    // NEW: Pre-populate scanner identifications if provided
+    if (widget.initialIdentifications != null && widget.initialIdentifications!.isNotEmpty) {
+      _scannerConfirmedIdentifications = List.from(widget.initialIdentifications!);
+      // Can't show snackbar in initState - do it after build completes
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showSnackBar('Loaded ${_scannerConfirmedIdentifications.length} identifications from scanner');
+      });
+    }
 
     _beachNameController.addListener(() {
       if (widget.beachId == null) {
@@ -190,18 +201,27 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     });
 
     if (widget.beachId != null) {
+      // Contributing to existing beach
       _appBarTitle = "Add Contribution";
       _beachNameController.text = 'Existing Beach';
       _currentLocation = widget.initialLocation;
+
+      // Still get location data for the contribution
+      if (_currentLocation != null) {
+        _reverseGeocodeLocation(_currentLocation!.latitude, _currentLocation!.longitude);
+      }
+
       WidgetsBinding.instance.addPostFrameCallback(
               (_) => FocusScope.of(context).requestFocus(_descriptionFocusNode));
     } else if (widget.initialLocation != null) {
+      // New beach with provided location (e.g., from map long-press)
       _currentLocation = widget.initialLocation;
       _reverseGeocodeLocation(
           _currentLocation!.latitude, _currentLocation!.longitude);
       WidgetsBinding.instance.addPostFrameCallback(
               (_) => FocusScope.of(context).requestFocus(_beachNameFocusNode));
     } else {
+      // New beach - get current location
       _getCurrentLocationAndGeocode();
       WidgetsBinding.instance.addPostFrameCallback(
               (_) => FocusScope.of(context).requestFocus(_beachNameFocusNode));
@@ -228,9 +248,13 @@ class _AddBeachScreenState extends State<AddBeachScreen>
             _currentLocation!.latitude, _currentLocation!.longitude);
       } else {
         _showSnackBar('Location permission denied.');
+        // Set defaults when permission denied
+        _setDefaultLocation();
       }
     } catch (e) {
       _showSnackBar('Failed to get current location: ${e.toString()}');
+      // Set defaults on error
+      _setDefaultLocation();
     } finally {
       if (mounted) setState(() => _gettingLocation = false);
     }
@@ -244,14 +268,60 @@ class _AddBeachScreenState extends State<AddBeachScreen>
       if (placemarks.isNotEmpty) {
         Placemark place = placemarks.first;
         setState(() {
-          _municipalityController.text = place.locality ?? '';
-          _provinceController.text = place.administrativeArea ?? '';
-          _countryController.text = place.country ?? '';
+          // Try multiple fields for municipality (city/town name)
+          // Priority: locality -> subAdministrativeArea -> subLocality -> name
+          String municipality = place.locality?.trim() ?? '';
+          if (municipality.isEmpty) {
+            municipality = place.subAdministrativeArea?.trim() ?? '';
+          }
+          if (municipality.isEmpty) {
+            municipality = place.subLocality?.trim() ?? '';
+          }
+          if (municipality.isEmpty) {
+            municipality = place.name?.trim() ?? '';
+          }
+
+          _municipalityController.text = municipality;
+          _provinceController.text = place.administrativeArea?.trim() ?? '';
+          _countryController.text = place.country?.trim() ?? '';
+
+          // Debug: Print what we got
+          debugPrint('📍 Geocoding Results:');
+          debugPrint('  Country: ${place.country}');
+          debugPrint('  Province: ${place.administrativeArea}');
+          debugPrint('  Municipality: $municipality');
+          debugPrint('  Available fields:');
+          debugPrint('    - locality: ${place.locality}');
+          debugPrint('    - subAdministrativeArea: ${place.subAdministrativeArea}');
+          debugPrint('    - subLocality: ${place.subLocality}');
+          debugPrint('    - name: ${place.name}');
         });
+      } else {
+        // No placemarks found - set reasonable defaults
+        debugPrint('⚠️ No placemarks found for coordinates');
+        _setDefaultLocation();
       }
     } catch (e) {
+      debugPrint('❌ Failed to get address details: $e');
       _showSnackBar('Failed to get address details.');
+      // Set defaults on error
+      _setDefaultLocation();
     }
+  }
+
+  void _setDefaultLocation() {
+    setState(() {
+      // Only set if still empty
+      if (_countryController.text.isEmpty) {
+        _countryController.text = 'Canada';
+      }
+      if (_provinceController.text.isEmpty) {
+        _provinceController.text = 'British Columbia';
+      }
+      if (_municipalityController.text.isEmpty) {
+        _municipalityController.text = '';
+      }
+    });
   }
 
   // --- Image & Scanner ---

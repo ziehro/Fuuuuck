@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:path/path.dart' show join;
 import 'package:mybeachbook/services/api/inaturalist_service.dart';
 import 'package:mybeachbook/models/confirmed_identification.dart';
+import 'package:mybeachbook/screens/add_beach_screen.dart';
 
 import '../services/api/mlkit_service.dart';
 
@@ -172,6 +173,91 @@ class _ScannerScreenState extends State<ScannerScreen> {
     }
   }
 
+  // NEW: Handle the "Done" button with dialog
+  Future<void> _handleDone() async {
+    if (_confirmedIdentifications.isEmpty) {
+      // No identifications, just go back
+      Navigator.of(context).pop();
+      return;
+    }
+
+    // Show dialog asking what to do with the identifications
+    final result = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('What would you like to do?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'You have identified ${_confirmedIdentifications.length} ${_confirmedIdentifications.length == 1 ? 'item' : 'items'}:',
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              ...(_confirmedIdentifications.take(3).map((item) => Padding(
+                padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                child: Text('• ${item.commonName}'),
+              ))),
+              if (_confirmedIdentifications.length > 3)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0, top: 4.0),
+                  child: Text('... and ${_confirmedIdentifications.length - 3} more'),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('discard'),
+              child: const Text('Discard'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop('save'),
+              child: const Text('Save for Later'),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.of(context).pop('new_beach'),
+              icon: const Icon(Icons.add_location_alt),
+              label: const Text('Add to New Beach'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (!mounted) return;
+
+    switch (result) {
+      case 'new_beach':
+      // Navigate to Add Beach Screen with the identifications
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => AddBeachScreen(
+              initialIdentifications: _confirmedIdentifications,
+            ),
+          ),
+        );
+        break;
+
+      case 'save':
+      // TODO: Implement saving to a "saved scans" collection or local storage
+        _showSnackBar('Saved ${_confirmedIdentifications.length} identifications');
+        Navigator.of(context).pop(_confirmedIdentifications);
+        break;
+
+      case 'discard':
+      default:
+      // Just go back without returning anything
+        Navigator.of(context).pop();
+        break;
+    }
+  }
+
   @override
   void dispose() {
     _controller?.dispose();
@@ -180,106 +266,109 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _initializeControllerFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        return Stack(
-          children: [
-            GestureDetector(
-              onScaleStart: _handleScaleStart,
-              onScaleUpdate: _handleScaleUpdate,
-              child: CameraPreview(_controller!),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scanner'),
+        actions: [
+          if (_confirmedIdentifications.isNotEmpty)
+            TextButton.icon(
+              onPressed: _handleDone,
+              icon: const Icon(Icons.check, color: Colors.white),
+              label: Text(
+                'Done (${_confirmedIdentifications.length})',
+                style: const TextStyle(color: Colors.white),
+              ),
             ),
+        ],
+      ),
+      body: FutureBuilder<void>(
+        future: _initializeControllerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          return Stack(
+            children: [
+              GestureDetector(
+                onScaleStart: _handleScaleStart,
+                onScaleUpdate: _handleScaleUpdate,
+                child: CameraPreview(_controller!),
+              ),
 
-            // Confirmed items display at bottom
-            if (_confirmedIdentifications.isNotEmpty)
-              Positioned(
-                bottom: 90,
-                left: 10,
-                right: 10,
-                child: Card(
-                  color: Colors.black.withOpacity(0.7),
-                  child: Padding(
-                    padding: const EdgeInsets.all(8.0),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Confirmed Identifications',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
+              // Confirmed items display at bottom
+              if (_confirmedIdentifications.isNotEmpty)
+                Positioned(
+                  bottom: 90,
+                  left: 10,
+                  right: 10,
+                  child: Card(
+                    color: Colors.black.withOpacity(0.7),
+                    child: Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Confirmed Identifications',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
                             ),
-                            TextButton(
-                              onPressed: () {
-                                // Return the confirmed data
-                                Navigator.of(context).pop(_confirmedIdentifications);
-                              },
-                              child: Text(
-                                'Done (${_confirmedIdentifications.length})',
-                                style: const TextStyle(color: Colors.greenAccent),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Wrap(
-                          spacing: 8.0,
-                          runSpacing: 4.0,
-                          children: _confirmedIdentifications.map((item) {
-                            return Chip(
-                              label: Text(item.commonName),
-                              deleteIconColor: Colors.white,
-                              onDeleted: () {
-                                setState(() {
-                                  _confirmedIdentifications.remove(item);
-                                });
-                              },
-                            );
-                          }).toList(),
-                        ),
-                      ],
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 8.0,
+                            runSpacing: 4.0,
+                            children: _confirmedIdentifications.map((item) {
+                              return Chip(
+                                label: Text(item.commonName),
+                                deleteIconColor: Colors.white,
+                                onDeleted: () {
+                                  setState(() {
+                                    _confirmedIdentifications.remove(item);
+                                  });
+                                },
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
 
-            if (_isProcessingImage)
-              Container(
-                color: Colors.black.withOpacity(0.5),
-                alignment: Alignment.center,
-                child: const CircularProgressIndicator(color: Colors.white),
-              ),
+              if (_isProcessingImage)
+                Container(
+                  color: Colors.black.withOpacity(0.5),
+                  alignment: Alignment.center,
+                  child: const CircularProgressIndicator(color: Colors.white),
+                ),
 
-            if (_identificationResults.isNotEmpty && !_isProcessingImage)
-              _buildResultsOverlay(),
+              if (_identificationResults.isNotEmpty && !_isProcessingImage)
+                _buildResultsOverlay(),
 
-            Positioned(
-              bottom: 20.0,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: FloatingActionButton(
-                  onPressed: _isProcessingImage || _identificationResults.isNotEmpty ? null : _takePicture,
-                  backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
-                      ? Colors.grey
-                      : Theme.of(context).floatingActionButtonTheme.backgroundColor,
-                  child: _isProcessingImage
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Icon(Icons.camera_alt),
+              Positioned(
+                bottom: 20.0,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: FloatingActionButton(
+                    onPressed: _isProcessingImage || _identificationResults.isNotEmpty
+                        ? null
+                        : _takePicture,
+                    backgroundColor: _isProcessingImage || _identificationResults.isNotEmpty
+                        ? Colors.grey
+                        : Theme.of(context).floatingActionButtonTheme.backgroundColor,
+                    child: _isProcessingImage
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Icon(Icons.camera_alt),
+                  ),
                 ),
               ),
-            ),
-          ],
-        );
-      },
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -330,7 +419,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   ElevatedButton(
-                    onPressed: _selectedSuggestionIndices.isEmpty ? null : _confirmSelectedIdentifications,
+                    onPressed: _selectedSuggestionIndices.isEmpty
+                        ? null
+                        : _confirmSelectedIdentifications,
                     child: Text('Confirm (${_selectedSuggestionIndices.length})'),
                   ),
                   ElevatedButton(

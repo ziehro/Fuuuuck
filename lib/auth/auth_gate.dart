@@ -85,6 +85,9 @@ class _MyAppContentState extends State<MyAppContent> {
   final GlobalKey<MapScreenState> _mapScreenKey = GlobalKey<MapScreenState>();
   late final List<Widget> _widgetOptions;
 
+  // Save reference to NotificationService to avoid Provider lookup in dispose
+  NotificationService? _notificationService;
+
   @override
   void initState() {
     super.initState();
@@ -92,24 +95,24 @@ class _MyAppContentState extends State<MyAppContent> {
       MapScreen(key: _mapScreenKey),
       const ScannerScreen(),
     ];
+  }
 
-    // Initialize notification service ONLY for admin users
-    // Do this in initState to avoid calling during build
-    if (widget.isAdmin) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        final notificationService = Provider.of<NotificationService>(context, listen: false);
-        notificationService.startListening();
-      });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Save reference and initialize notification service ONLY for admin users
+    if (widget.isAdmin && _notificationService == null) {
+      _notificationService = Provider.of<NotificationService>(context, listen: false);
+      _notificationService?.startListening();
     }
   }
 
   @override
   void dispose() {
-    // Clean up notification service when widget is disposed
-    if (widget.isAdmin) {
-      final notificationService = Provider.of<NotificationService>(context, listen: false);
-      notificationService.stopListening();
-    }
+    // Clean up notification service using saved reference
+    // Pass notifyChange: false to avoid triggering rebuilds during disposal
+    _notificationService?.stopListening(notifyChange: false);
     super.dispose();
   }
 
@@ -153,10 +156,9 @@ class _MyAppContentState extends State<MyAppContent> {
 
     if (shouldSignOut == true) {
       final authService = Provider.of<AuthService>(context, listen: false);
-      final notificationService = Provider.of<NotificationService>(context, listen: false);
 
-      // Stop notification service when signing out
-      notificationService.stopListening();
+      // Stop notification service before signing out (use saved reference)
+      _notificationService?.stopListening(notifyChange: false);
 
       await authService.signOut();
     }
