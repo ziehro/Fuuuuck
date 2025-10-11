@@ -363,7 +363,12 @@ class _AddBeachScreenState extends State<AddBeachScreen>
   Future<void> _scanForIdentifications() async {
     final List<ConfirmedIdentification>? confirmed = await Navigator.push(
       context,
-      MaterialPageRoute(builder: (context) => const ScannerScreen()),
+      MaterialPageRoute(
+        builder: (context) => const ScannerScreen(
+          showAppBar: true,      // Show app bar when standalone
+          returnOnDone: true,     // NEW: Return data directly without dialog
+        ),
+      ),
     );
     if (confirmed != null) {
       setState(() => _scannerConfirmedIdentifications = confirmed);

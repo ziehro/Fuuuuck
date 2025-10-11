@@ -93,7 +93,7 @@ class _MyAppContentState extends State<MyAppContent> {
     super.initState();
     _widgetOptions = <Widget>[
       MapScreen(key: _mapScreenKey),
-      const ScannerScreen(),
+      const ScannerScreen(showAppBar: false), // ← Make sure this is here
     ];
   }
 

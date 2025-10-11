@@ -11,7 +11,14 @@ import 'package:mybeachbook/screens/add_beach_screen.dart';
 import '../services/api/mlkit_service.dart';
 
 class ScannerScreen extends StatefulWidget {
-  const ScannerScreen({super.key});
+  final bool showAppBar;
+  final bool returnOnDone; // NEW: If true, return data instead of showing dialog
+
+  const ScannerScreen({
+    super.key,
+    this.showAppBar = true,
+    this.returnOnDone = false, // NEW: Default to false for bottom nav
+  });
 
   @override
   State<ScannerScreen> createState() => _ScannerScreenState();
@@ -176,12 +183,22 @@ class _ScannerScreenState extends State<ScannerScreen> {
   // NEW: Handle the "Done" button with dialog
   Future<void> _handleDone() async {
     if (_confirmedIdentifications.isEmpty) {
-      // No identifications, just go back
-      Navigator.of(context).pop();
+      // No identifications, just go back if in standalone mode
+      if (widget.showAppBar) {
+        Navigator.of(context).pop();
+      }
+      return;
+    }
+
+    // If returnOnDone is true, just return the identifications without showing dialog
+    // This is used when called from Add Beach screen
+    if (widget.returnOnDone) {
+      Navigator.of(context).pop(_confirmedIdentifications);
       return;
     }
 
     // Show dialog asking what to do with the identifications
+    // This is used when in bottom nav scanner
     final result = await showDialog<String>(
       context: context,
       builder: (BuildContext context) {
@@ -212,10 +229,6 @@ class _ScannerScreenState extends State<ScannerScreen> {
               onPressed: () => Navigator.of(context).pop('discard'),
               child: const Text('Discard'),
             ),
-            TextButton(
-              onPressed: () => Navigator.of(context).pop('save'),
-              child: const Text('Save for Later'),
-            ),
             ElevatedButton.icon(
               onPressed: () => Navigator.of(context).pop('new_beach'),
               icon: const Icon(Icons.add_location_alt),
@@ -234,26 +247,43 @@ class _ScannerScreenState extends State<ScannerScreen> {
 
     switch (result) {
       case 'new_beach':
-      // Navigate to Add Beach Screen with the identifications
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => AddBeachScreen(
-              initialIdentifications: _confirmedIdentifications,
-            ),
-          ),
-        );
-        break;
+      // Pause camera preview before navigating
+        try {
+          await _controller?.pausePreview();
+        } catch (e) {
+          debugPrint('Error pausing camera: $e');
+        }
 
-      case 'save':
-      // TODO: Implement saving to a "saved scans" collection or local storage
-        _showSnackBar('Saved ${_confirmedIdentifications.length} identifications');
-        Navigator.of(context).pop(_confirmedIdentifications);
+        // Navigate to Add Beach Screen with the identifications
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => AddBeachScreen(
+                initialIdentifications: _confirmedIdentifications,
+              ),
+            ),
+          ).then((_) {
+            // Resume camera when coming back
+            if (mounted && _controller?.value.isInitialized == true) {
+              _controller?.resumePreview();
+            }
+          });
+        }
         break;
 
       case 'discard':
       default:
-      // Just go back without returning anything
-        Navigator.of(context).pop();
+      // Clear the identifications
+        setState(() {
+          _confirmedIdentifications.clear();
+        });
+        _showSnackBar('Identifications discarded');
+
+        // Only pop if we're in standalone mode (with AppBar)
+        // In embedded mode (bottom nav), we just stay on the scanner screen
+        if (widget.showAppBar && mounted) {
+          Navigator.of(context).pop();
+        }
         break;
     }
   }
@@ -267,20 +297,9 @@ class _ScannerScreenState extends State<ScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: widget.showAppBar ? AppBar(
         title: const Text('Scanner'),
-        actions: [
-          if (_confirmedIdentifications.isNotEmpty)
-            TextButton.icon(
-              onPressed: _handleDone,
-              icon: const Icon(Icons.check, color: Colors.white),
-              label: Text(
-                'Done (${_confirmedIdentifications.length})',
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-        ],
-      ),
+      ) : null, // ← This must be null when showAppBar is false
       body: FutureBuilder<void>(
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
@@ -294,6 +313,43 @@ class _ScannerScreenState extends State<ScannerScreen> {
                 onScaleUpdate: _handleScaleUpdate,
                 child: CameraPreview(_controller!),
               ),
+
+              // DONE BUTTON - Moved from AppBar to top-right corner
+              if (_confirmedIdentifications.isNotEmpty)
+                Positioned(
+                  top: 16,
+                  right: 16,
+                  child: Material(
+                    elevation: 4,
+                    borderRadius: BorderRadius.circular(24),
+                    color: Theme.of(context).colorScheme.primary,
+                    child: InkWell(
+                      onTap: _handleDone,
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check, color: Colors.white, size: 20),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Done (${_confirmedIdentifications.length})',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
 
               // Confirmed items display at bottom
               if (_confirmedIdentifications.isNotEmpty)
