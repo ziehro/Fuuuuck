@@ -1,6 +1,4 @@
 // lib/services/notification_service.dart
-// NEW FILE - Handles in-app notifications for pending items
-
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
@@ -26,26 +24,42 @@ class NotificationService extends ChangeNotifier {
     if (_isInitialized) return;
     _isInitialized = true;
 
-    // Listen to pending beaches
+    // Listen to pending beaches with error handling
     _beachesSubscription = _firestore
         .collection('pending_beaches')
         .snapshots()
-        .listen((snapshot) {
-      _pendingBeachesCount = snapshot.docs.length;
-      notifyListeners();
-    });
+        .listen(
+          (snapshot) {
+        _pendingBeachesCount = snapshot.docs.length;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('NotificationService: Error listening to pending_beaches: $error');
+        // Reset count on error (likely permission denied)
+        _pendingBeachesCount = 0;
+        notifyListeners();
+      },
+    );
 
-    // Listen to pending contributions (across all beaches)
+    // Listen to pending contributions with error handling
     _contributionsSubscription = _firestore
         .collectionGroup('pending_contributions')
         .snapshots()
-        .listen((snapshot) {
-      _pendingContributionsCount = snapshot.docs.length;
-      notifyListeners();
-    });
+        .listen(
+          (snapshot) {
+        _pendingContributionsCount = snapshot.docs.length;
+        notifyListeners();
+      },
+      onError: (error) {
+        debugPrint('NotificationService: Error listening to pending_contributions: $error');
+        // Reset count on error (likely permission denied)
+        _pendingContributionsCount = 0;
+        notifyListeners();
+      },
+    );
   }
 
-  /// Stop listening (call when user signs out)
+  /// Stop listening (call when user signs out or is not admin)
   void stopListening() {
     _beachesSubscription?.cancel();
     _contributionsSubscription?.cancel();
@@ -73,6 +87,10 @@ class NotificationService extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error refreshing notification counts: $e');
+      // Reset counts on error
+      _pendingBeachesCount = 0;
+      _pendingContributionsCount = 0;
+      notifyListeners();
     }
   }
 

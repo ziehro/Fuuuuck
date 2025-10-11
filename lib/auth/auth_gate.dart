@@ -1,20 +1,19 @@
 // lib/auth/auth_gate.dart
-// UPDATED VERSION - Add notification badge for admin
+// FIXED VERSION - Prevents permission errors for non-admin users
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import 'package:mybeachbook/services/auth_service.dart';
-import 'package:mybeachbook/services/notification_service.dart'; // ADD THIS
+import 'package:mybeachbook/services/notification_service.dart';
 import 'package:mybeachbook/auth/login_page.dart';
 import 'package:mybeachbook/auth/register_page.dart';
 
-// Placeholder imports for your screens (ensure these paths are correct)
 import 'package:mybeachbook/screens/scanner_screen.dart';
 import 'package:mybeachbook/screens/map_screen.dart';
 import 'package:mybeachbook/screens/add_beach_screen.dart';
 import 'package:mybeachbook/screens/settings_screen.dart';
-import 'package:mybeachbook/screens/moderation_screen.dart'; // ADD THIS
+import 'package:mybeachbook/screens/moderation_screen.dart';
 
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
@@ -24,7 +23,6 @@ class AuthGate extends StatefulWidget {
 }
 
 class _AuthGateState extends State<AuthGate> {
-  // Local state to manage showing login or register page
   bool showLoginPage = true;
 
   // Admin user IDs - REPLACE WITH YOUR ACTUAL UID
@@ -41,13 +39,10 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
-    final notificationService = Provider.of<NotificationService>(context); // ADD THIS
 
-    // Listen to authentication state changes
     return StreamBuilder<User?>(
       stream: authService.authStateChanges,
       builder: (context, snapshot) {
-        // Show loading spinner while checking auth state
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(
             body: Center(
@@ -61,18 +56,7 @@ class _AuthGateState extends State<AuthGate> {
           final user = snapshot.data!;
           final isAdmin = _adminUserIds.contains(user.uid);
 
-          // Start notification service for admin users
-          if (isAdmin) {
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              notificationService.startListening();
-            });
-          } else {
-            // Stop listening if not admin
-            WidgetsBinding.instance.addPostFrameCallback((_) {
-              notificationService.stopListening();
-            });
-          }
-
+          // Return the app content - notification management happens inside MyAppContent
           return MyAppContent(isAdmin: isAdmin);
         }
 
@@ -87,7 +71,6 @@ class _AuthGateState extends State<AuthGate> {
   }
 }
 
-// Extracted MyApp's Scaffold content into a separate widget
 class MyAppContent extends StatefulWidget {
   final bool isAdmin;
 
@@ -98,12 +81,8 @@ class MyAppContent extends StatefulWidget {
 }
 
 class _MyAppContentState extends State<MyAppContent> {
-  int _selectedIndex = 0; // Index for the currently selected tab
-
-  // Global key to access MapScreen state
+  int _selectedIndex = 0;
   final GlobalKey<MapScreenState> _mapScreenKey = GlobalKey<MapScreenState>();
-
-  // List of widgets for each tab
   late final List<Widget> _widgetOptions;
 
   @override
@@ -113,6 +92,25 @@ class _MyAppContentState extends State<MyAppContent> {
       MapScreen(key: _mapScreenKey),
       const ScannerScreen(),
     ];
+
+    // Initialize notification service ONLY for admin users
+    // Do this in initState to avoid calling during build
+    if (widget.isAdmin) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final notificationService = Provider.of<NotificationService>(context, listen: false);
+        notificationService.startListening();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    // Clean up notification service when widget is disposed
+    if (widget.isAdmin) {
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
+      notificationService.stopListening();
+    }
+    super.dispose();
   }
 
   void _onItemTapped(int index) {
@@ -121,7 +119,6 @@ class _MyAppContentState extends State<MyAppContent> {
     });
   }
 
-  // Get the app bar title based on selected tab
   String _getAppBarTitle() {
     switch (_selectedIndex) {
       case 0:
@@ -133,7 +130,6 @@ class _MyAppContentState extends State<MyAppContent> {
     }
   }
 
-  // Show confirmation dialog before signing out
   Future<void> _showSignOutConfirmation() async {
     final bool? shouldSignOut = await showDialog<bool>(
       context: context,
@@ -166,13 +162,10 @@ class _MyAppContentState extends State<MyAppContent> {
     }
   }
 
-  // Get the app bar actions based on selected tab
   List<Widget> _getAppBarActions() {
     List<Widget> actions = [];
 
-    // Map-specific actions
     if (_selectedIndex == 0) {
-      // Toggle markers on/off
       actions.add(
         IconButton(
           tooltip: 'Toggle markers',
@@ -183,7 +176,6 @@ class _MyAppContentState extends State<MyAppContent> {
         ),
       );
 
-      // Layers menu
       actions.add(
         PopupMenuButton<String?>(
           tooltip: 'Heatmap layer',
@@ -209,7 +201,6 @@ class _MyAppContentState extends State<MyAppContent> {
         ),
       );
 
-      // Clear heatmap
       actions.add(
         IconButton(
           tooltip: 'Clear heatmap',
@@ -270,7 +261,6 @@ class _MyAppContentState extends State<MyAppContent> {
     return actions;
   }
 
-  // NEW: Build notification badge for admin
   Widget _buildNotificationBadge() {
     return Consumer<NotificationService>(
       builder: (context, notificationService, child) {

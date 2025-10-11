@@ -2,7 +2,7 @@ name: mybeachbook
 description: A real-time beach object recognition and data logging app.
 publish_to: 'none'
 
-version: 1.0.0+6
+version: 1.0.0+7
 
 environment:
   sdk: '^3.4.0' # Using the modern caret (^) syntax as required.
