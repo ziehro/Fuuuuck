@@ -222,44 +222,46 @@ class BeachDetailScreen extends StatelessWidget {
                     floating: false,
                     pinned: true,
                     leading: const BackButton(),
-                    // ADD THIS: Show ID in app bar for admins
+                    // ADMIN: Show ID in app bar - MOVED DOWN 10 pixels with padding
                     actions: _isAdmin
                         ? [
-                      IconButton(
-                        icon: const Icon(Icons.info_outline, color: Colors.white),
-                        tooltip: 'Beach ID (tap to copy)',
-                        onPressed: () {
-                          _copyBeachIdToClipboard(context);
-                          // Also show the ID in a dialog
-                          showDialog(
-                            context: context,
-                            builder: (context) => AlertDialog(
-                              title: const Row(
-                                children: [
-                                  Icon(Icons.admin_panel_settings, color: Colors.orange),
-                                  SizedBox(width: 8),
-                                  Text('Beach ID'),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10), // ADDED: 10px padding
+                        child: IconButton(
+                          icon: const Icon(Icons.info_outline, color: Colors.white),
+                          tooltip: 'Beach ID (tap to copy)',
+                          onPressed: () {
+                            _copyBeachIdToClipboard(context);
+                            showDialog(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Row(
+                                  children: [
+                                    Icon(Icons.admin_panel_settings, color: Colors.orange),
+                                    SizedBox(width: 8),
+                                    Text('Beach ID'),
+                                  ],
+                                ),
+                                content: SelectableText(
+                                  beachId,
+                                  style: const TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () {
+                                      _copyBeachIdToClipboard(context);
+                                      Navigator.pop(context);
+                                    },
+                                    child: const Text('Copy & Close'),
+                                  ),
                                 ],
                               ),
-                              content: SelectableText(
-                                beachId,
-                                style: const TextStyle(
-                                  fontFamily: 'monospace',
-                                  fontSize: 14,
-                                ),
-                              ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () {
-                                    _copyBeachIdToClipboard(context);
-                                    Navigator.pop(context);
-                                  },
-                                  child: const Text('Copy & Close'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
                     ]
                         : null,
@@ -274,9 +276,36 @@ class BeachDetailScreen extends StatelessWidget {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-                      child: Text(
-                        beach.name,
-                        style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            beach.name,
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          // ADD: Contribution count chip below title
+                          Row(
+                            children: [
+                              Chip(
+                                avatar: const Icon(Icons.people, size: 18),
+                                label: Text(
+                                  '${beach.totalContributions} Contribution${beach.totalContributions == 1 ? '' : 's'}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                                side: BorderSide(
+                                  color: Theme.of(context).primaryColor.withOpacity(0.3),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -920,10 +949,6 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final displayDescriptions = widget.descriptions.isNotEmpty
-        ? widget.descriptions
-        : ['No description available.'];
-
     return SizedBox(
       height: 350,
       child: Stack(
@@ -968,9 +993,9 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
             },
           ),
 
-          // Tap hint overlay (shows briefly)
+          // Tap hint overlay - MOVED DOWN 10 pixels (from top: 20 to top: 30)
           Positioned(
-            top: 20,
+            top: 30,
             right: 20,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -978,7 +1003,7 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
                 color: Colors.black.withOpacity(0.6),
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Row(
+              /*child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(Icons.zoom_in, color: Colors.white, size: 16),
@@ -992,41 +1017,13 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
                     ),
                   ),
                 ],
-              ),
+              ),*/
             ),
           ),
 
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Chip(
-              avatar: const Icon(Icons.people, color: Colors.white),
-              label: Text(
-                '${widget.contributionCount} Contributions',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              backgroundColor: Colors.black.withOpacity(0.6),
-            ),
-          ),
+          // REMOVED: Contribution count chip (moved to below title)
 
-          Container(
-            width: double.infinity,
-            color: Colors.black.withOpacity(0.6),
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-            child: Text(
-              widget.descriptions.length > _currentPage
-                  ? widget.descriptions[_currentPage]
-                  : displayDescriptions[0],
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-
+          // Page indicators (dots at bottom)
           Positioned(
             bottom: 16,
             child: Row(
