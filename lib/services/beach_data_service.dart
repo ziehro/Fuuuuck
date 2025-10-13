@@ -18,6 +18,8 @@ import 'package:dart_openai/dart_openai.dart';
 
 import 'package:mybeachbook/services/api/secrets.dart';
 
+import 'gemini_service.dart';
+
 class BeachDataService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseStorage _storage = FirebaseStorage.instance;
@@ -28,6 +30,7 @@ class BeachDataService {
   static const bool requireModeration = true;
 
   // === Upload user + AI image ===
+  /// Upload user + AI image using Gemini
   Future<Map<String, String>> uploadUserAndAiImages({
     required String beachId,
     required File userImageFile,
@@ -41,38 +44,18 @@ class BeachDataService {
       label: 'user',
     );
 
-    // 2) Generate AI image → save to temp → upload via same putFile path
-    OpenAI.apiKey = openAIApiKey;
-    final result = await OpenAI.instance.image.create(
-      model: 'dall-e-3',
-      prompt: aiPrompt,
-      n: 1,
-      size: OpenAIImageSize.size1024,
+    // 2) Generate AI image using Gemini
+    final geminiService = GeminiService();
+    final geminiInfo = await geminiService.getInfoAndImage(
+      'Beach Image',
+      description: aiPrompt,
     );
 
-    final openAiUrl = result.data.first.url;
-    if (openAiUrl == null || openAiUrl.isEmpty) {
-      throw Exception('OpenAI returned no image URL.');
+    if (geminiInfo.imageUrl.isEmpty) {
+      throw Exception('Failed to generate AI image with Gemini');
     }
 
-    final resp = await http.get(Uri.parse(openAiUrl));
-    if (resp.statusCode != 200) {
-      throw Exception('Failed to download OpenAI image: HTTP ${resp.statusCode}');
-    }
-    final bytes = resp.bodyBytes;
-
-    final dir = await getTemporaryDirectory();
-    final aiFile = File('${dir.path}/ai_${_uuid.v4()}.png');
-    await aiFile.writeAsBytes(bytes, flush: true);
-
-    final aiUrl = await _uploadFileToBeachFolder(
-      beachId: beachId,
-      file: aiFile,
-      ext: 'png',
-      label: 'ai',
-    );
-
-    return {'user': userUrl, 'ai': aiUrl};
+    return {'user': userUrl, 'ai': geminiInfo.imageUrl};
   }
 
   Future<String?> uploadImage(File imageFile) async {

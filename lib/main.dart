@@ -34,12 +34,12 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await FirebaseAppCheck.instance.activate(
+  /*await FirebaseAppCheck.instance.activate(
     androidProvider: Platform.isAndroid
         ? AndroidProvider.debug
         : AndroidProvider.debug,
     appleProvider: AppleProvider.debug,
-  );
+  );*/
 
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,

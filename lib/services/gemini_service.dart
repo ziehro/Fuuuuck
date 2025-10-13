@@ -1,14 +1,13 @@
 // lib/services/gemini_service.dart
-// Enhanced with AI image watermarking
+// Hybrid: Gemini for text generation + OpenAI for image generation
 
 import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
+import 'dart:io';
 import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:dart_openai/dart_openai.dart';
+import 'package:google_generative_ai/google_generative_ai.dart';
+import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path_provider/path_provider.dart';
@@ -18,26 +17,32 @@ import 'package:mybeachbook/services/api/secrets.dart';
 
 class GeminiService {
   static const String _uploadFolder = 'beach_images';
+  late final GenerativeModel _textModel;
+
+  // OpenAI endpoints for image generation
+  static const String _openaiBaseUrl = 'https://api.openai.com/v1';
 
   GeminiService() {
-    OpenAI.apiKey = openAIApiKey;
+    _textModel = GenerativeModel(
+      model: 'gemini-1.5-flash',
+      apiKey: geminiApiKey,
+    );
   }
 
-  /// Build a single-paragraph beach description using ONLY facts from userAnswers
+  /// Build a single-paragraph beach description using Gemini (cheap: $0.00015/1K tokens)
   Future<String> generateBeachDescription({
     required String beachName,
     required Map<String, dynamic> userAnswers,
   }) async {
     final facts = _extractFacts(userAnswers);
 
-    final systemPrompt =
-        'You write concise (120–180 words), visitor-friendly beach summaries. '
-        'You MUST only use the provided structured facts. '
-        'Do NOT invent locations, animals, amenities, weather, or anything not explicitly present. '
-        'Interpret numeric values where any number > 1 indicates presence; use their "level" field to guide wording. '
-        'Prefer clear, concrete phrasing. No bullet lists.';
+    final prompt = '''
+You write concise (120–180 words), visitor-friendly beach summaries.
+You MUST only use the provided structured facts.
+Do NOT invent locations, animals, amenities, weather, or anything not explicitly present.
+Interpret numeric values where any number > 1 indicates presence; use their "level" field to guide wording.
+Prefer clear, concrete phrasing. No bullet lists.
 
-    final userPrompt = '''
 Beach name: "$beachName"
 
 Structured facts (JSON):
@@ -52,35 +57,15 @@ Instructions:
 ''';
 
     try {
-      final res = await OpenAI.instance.chat.create(
-        model: 'gpt-4o-mini',
-        messages: [
-          OpenAIChatCompletionChoiceMessageModel(
-            role: OpenAIChatMessageRole.system,
-            content: [
-              OpenAIChatCompletionChoiceMessageContentItemModel.text(systemPrompt),
-            ],
-          ),
-          OpenAIChatCompletionChoiceMessageModel(
-            role: OpenAIChatMessageRole.user,
-            content: [
-              OpenAIChatCompletionChoiceMessageContentItemModel.text(userPrompt),
-            ],
-          ),
-        ],
-        maxTokens: 260,
-        temperature: 0.5,
-      );
-
-      return res.choices.first.message.content?.first.text?.trim() ??
-          'No description could be generated.';
+      final response = await _textModel.generateContent([Content.text(prompt)]);
+      return response.text?.trim() ?? 'No description could be generated.';
     } catch (e) {
-      debugPrint('OpenAI text error: $e');
+      debugPrint('Gemini text error: $e');
       return 'Failed to generate AI description.';
     }
   }
 
-  /// Generate an image with AI watermark and upload to Firebase
+  /// Generate an image with OpenAI DALL-E 3 and upload to Firebase
   Future<GeminiInfo> getInfoAndImage(
       String subject, {
         String? description,
@@ -92,15 +77,12 @@ Instructions:
           'Create a high-quality, realistic photo-style image of this beach scene. '
           'Do not add extra elements beyond what is implied. Scene:\n$finalDescription';
 
-      final img = await OpenAI.instance.image.create(
-        prompt: imagePrompt,
-        n: 1,
-        size: OpenAIImageSize.size1024,
-        responseFormat: OpenAIImageResponseFormat.b64Json,
-      );
+      debugPrint('Generating image with OpenAI DALL-E 3...');
 
-      if (!img.haveData || img.data.isEmpty || img.data.first.b64Json == null) {
-        debugPrint('OpenAI image: no data returned');
+      final imageBytes = await _generateImageWithOpenAI(imagePrompt);
+
+      if (imageBytes == null) {
+        debugPrint('OpenAI: no image data returned');
         return GeminiInfo(
           description: finalDescription,
           image: const Icon(Icons.image_not_supported),
@@ -108,12 +90,14 @@ Instructions:
         );
       }
 
-      // Decode base64 -> add watermark -> upload
-      final originalBytes = base64Decode(img.data.first.b64Json!);
-      final watermarkedBytes = await _addAiWatermark(originalBytes);
+      // Add watermark to distinguish AI images
+      debugPrint('Adding AI watermark...');
+      final watermarkedBytes = await _addAiWatermark(imageBytes);
+
+      debugPrint('Image generated (${watermarkedBytes.length} bytes), uploading to Firebase...');
       final url = await _uploadPngAsUserFlow(watermarkedBytes);
 
-      debugPrint('Uploaded watermarked image URL: $url');
+      debugPrint('Uploaded image URL: $url');
 
       final imageWidget = Image.network(
         url,
@@ -127,7 +111,7 @@ Instructions:
         imageUrl: url,
       );
     } catch (e) {
-      debugPrint('OpenAI image->Firebase error: $e');
+      debugPrint('OpenAI->Firebase error: $e');
       return GeminiInfo(
         description: description ?? 'Could not load information.',
         image: const Icon(Icons.error),
@@ -136,18 +120,73 @@ Instructions:
     }
   }
 
+  /// Generate image using OpenAI DALL-E 3
+  Future<Uint8List?> _generateImageWithOpenAI(String prompt) async {
+    try {
+      final url = Uri.parse('$_openaiBaseUrl/images/generations');
+
+      final requestBody = {
+        'model': 'dall-e-3',
+        'prompt': prompt,
+        'n': 1,
+        'size': '1024x1024',
+        'response_format': 'b64_json',
+      };
+
+      debugPrint('Sending image request to OpenAI DALL-E 3...');
+      final response = await http.post(
+        url,
+        headers: {
+          'Authorization': 'Bearer $openAIApiKey',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(requestBody),
+      ).timeout(const Duration(seconds: 90));
+
+      if (response.statusCode != 200) {
+        debugPrint('OpenAI API error: ${response.statusCode}');
+        debugPrint('Response: ${response.body}');
+        return null;
+      }
+
+      final responseData = json.decode(response.body);
+      final data = responseData['data'] as List?;
+
+      if (data == null || data.isEmpty) {
+        debugPrint('No image data in response');
+        return null;
+      }
+
+      final base64Image = data[0]['b64_json'] as String?;
+
+      if (base64Image != null) {
+        debugPrint('Found image data, decoding...');
+        return base64Decode(base64Image);
+      }
+
+      debugPrint('No b64_json found in response');
+      return null;
+    } catch (e) {
+      debugPrint('Error generating image with OpenAI: $e');
+      return null;
+    }
+  }
+
   /// Add a subtle AI watermark to the image
   Future<Uint8List> _addAiWatermark(Uint8List imageBytes) async {
     try {
-      // Decode the image
-      final ui.Codec codec = await ui.instantiateImageCodec(imageBytes);
-      final ui.FrameInfo frameInfo = await codec.getNextFrame();
-      final ui.Image originalImage = frameInfo.image;
+      // Import required for image manipulation
+      final codec = await ui.instantiateImageCodec(imageBytes);
+      final frameInfo = await codec.getNextFrame();
+      final originalImage = frameInfo.image;
 
       // Create a canvas to draw on
       final recorder = ui.PictureRecorder();
       final canvas = Canvas(recorder);
-      final size = Size(originalImage.width.toDouble(), originalImage.height.toDouble());
+      final size = Size(
+        originalImage.width.toDouble(),
+        originalImage.height.toDouble(),
+      );
 
       // Draw the original image
       canvas.drawImage(originalImage, Offset.zero, Paint());
@@ -177,20 +216,20 @@ Instructions:
 
       // Position watermark at bottom-right corner with padding
       final watermarkOffset = Offset(
-        size.width - textPainter.width - (size.width * 0.02), // 2% padding from right
-        size.height - textPainter.height - (size.height * 0.02), // 2% padding from bottom
+        size.width - textPainter.width - (size.width * 0.02),
+        size.height - textPainter.height - (size.height * 0.02),
       );
 
       textPainter.paint(canvas, watermarkOffset);
 
       // Convert back to bytes
       final picture = recorder.endRecording();
-      final ui.Image watermarkedImage = await picture.toImage(
+      final watermarkedImage = await picture.toImage(
         originalImage.width,
         originalImage.height,
       );
 
-      final ByteData? byteData = await watermarkedImage.toByteData(
+      final byteData = await watermarkedImage.toByteData(
         format: ui.ImageByteFormat.png,
       );
 
@@ -205,27 +244,18 @@ Instructions:
     }
   }
 
-  // ... [Rest of your existing methods remain the same]
-
   Future<String> _generateDescription(String subject) async {
     final prompt =
         'Provide a short, educational description (2–3 sentences) strictly about: "$subject". '
         'Do not add unrelated details.';
-    final res = await OpenAI.instance.chat.create(
-      model: 'gpt-4o-mini',
-      messages: [
-        OpenAIChatCompletionChoiceMessageModel(
-          role: OpenAIChatMessageRole.user,
-          content: [
-            OpenAIChatCompletionChoiceMessageContentItemModel.text(prompt),
-          ],
-        ),
-      ],
-      maxTokens: 150,
-      temperature: 0.3,
-    );
-    return res.choices.first.message.content?.first.text?.trim() ??
-        'No description available.';
+
+    try {
+      final response = await _textModel.generateContent([Content.text(prompt)]);
+      return response.text?.trim() ?? 'No description available.';
+    } catch (e) {
+      debugPrint('Gemini description error: $e');
+      return 'No description available.';
+    }
   }
 
   Future<String> _uploadPngAsUserFlow(Uint8List bytes) async {

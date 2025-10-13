@@ -11,9 +11,14 @@ import 'package:mybeachbook/services/gemini_service.dart';
 import 'package:mybeachbook/util/long_press_descriptions.dart';
 import 'package:mybeachbook/widgets/fullscreen_image_viewer.dart';
 import 'package:mybeachbook/main.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/services.dart';
+import 'package:mybeachbook/util/constants.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
+
+  static const List<String> _adminUserIds = AppConstants.adminUserIds;
 
   const BeachDetailScreen({super.key, required this.beachId});
 
@@ -174,6 +179,21 @@ class BeachDetailScreen extends StatelessWidget {
         });
   }
 
+  void _copyBeachIdToClipboard(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: beachId));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Beach ID copied to clipboard'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  bool get _isAdmin {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    return currentUser != null && _adminUserIds.contains(currentUser.uid);
+  }
+
   @override
   Widget build(BuildContext context) {
     final beachDataService = Provider.of<BeachDataService>(context);
@@ -202,6 +222,47 @@ class BeachDetailScreen extends StatelessWidget {
                     floating: false,
                     pinned: true,
                     leading: const BackButton(),
+                    // ADD THIS: Show ID in app bar for admins
+                    actions: _isAdmin
+                        ? [
+                      IconButton(
+                        icon: const Icon(Icons.info_outline, color: Colors.white),
+                        tooltip: 'Beach ID (tap to copy)',
+                        onPressed: () {
+                          _copyBeachIdToClipboard(context);
+                          // Also show the ID in a dialog
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Row(
+                                children: [
+                                  Icon(Icons.admin_panel_settings, color: Colors.orange),
+                                  SizedBox(width: 8),
+                                  Text('Beach ID'),
+                                ],
+                              ),
+                              content: SelectableText(
+                                beachId,
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 14,
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () {
+                                    _copyBeachIdToClipboard(context);
+                                    Navigator.pop(context);
+                                  },
+                                  child: const Text('Copy & Close'),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                    ]
+                        : null,
                     flexibleSpace: FlexibleSpaceBar(
                       background: ImageDescriptionCarousel(
                         imageUrls: beach.imageUrls,
