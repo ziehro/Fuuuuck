@@ -276,34 +276,30 @@ class BeachDetailScreen extends StatelessWidget {
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Text(
-                            beach.name,
-                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                              fontWeight: FontWeight.bold,
+                          Expanded(
+                            child: Text(
+                              beach.name,
+                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          // ADD: Contribution count chip below title
-                          Row(
-                            children: [
-                              Chip(
-                                avatar: const Icon(Icons.people, size: 18),
-                                label: Text(
-                                  '${beach.totalContributions} Contribution${beach.totalContributions == 1 ? '' : 's'}',
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                                side: BorderSide(
-                                  color: Theme.of(context).primaryColor.withOpacity(0.3),
-                                ),
+                          Chip(
+                            avatar: const Icon(Icons.people, size: 18),
+                            label: Text(
+                              '${beach.totalContributions}',
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
-                            ],
+                            ),
+                            backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                            side: BorderSide(
+                              color: Theme.of(context).primaryColor.withOpacity(0.3),
+                            ),
                           ),
                         ],
                       ),
