@@ -189,6 +189,114 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showDeleteBeachDialog(BuildContext context, String beachId, String beachName) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.red, size: 28),
+            SizedBox(width: 8),
+            Text('Delete Beach?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This action is PERMANENT and cannot be undone!',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text('The following will be deleted:'),
+            const SizedBox(height: 8),
+            Text('• Beach: $beachName'),
+            const Text('• All contributions'),
+            const Text('• All images from storage'),
+            const SizedBox(height: 16),
+            const Text(
+              'Are you absolutely sure?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('DELETE PERMANENTLY'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _deleteBeach(context, beachId);
+    }
+  }
+
+  Future<void> _deleteBeach(BuildContext context, String beachId) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Deleting beach...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final beachDataService = Provider.of<BeachDataService>(context, listen: false);
+      await beachDataService.deleteBeach(beachId);
+
+      // Close loading dialog
+      if (context.mounted) Navigator.pop(context);
+
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Beach deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate back to map
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (context.mounted) Navigator.pop(context);
+
+      // Show error message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete beach: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   bool get _isAdmin {
     final currentUser = FirebaseAuth.instance.currentUser;
     return currentUser != null && _adminUserIds.contains(currentUser.uid);
@@ -222,11 +330,10 @@ class BeachDetailScreen extends StatelessWidget {
                     floating: false,
                     pinned: true,
                     leading: const BackButton(),
-                    // ADMIN: Show ID in app bar - MOVED DOWN 10 pixels with padding
                     actions: _isAdmin
                         ? [
                       Padding(
-                        padding: const EdgeInsets.only(top: 10), // ADDED: 10px padding
+                        padding: const EdgeInsets.only(top: 10),
                         child: IconButton(
                           icon: const Icon(Icons.info_outline, color: Colors.white),
                           tooltip: 'Beach ID (tap to copy)',
@@ -261,6 +368,14 @@ class BeachDetailScreen extends StatelessWidget {
                               ),
                             );
                           },
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: IconButton(
+                          icon: const Icon(Icons.delete_forever, color: Colors.red),
+                          tooltip: 'Delete Beach',
+                          onPressed: () => _showDeleteBeachDialog(context, beachId, beach.name),
                         ),
                       ),
                     ]
@@ -398,7 +513,6 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildFloraTab(BuildContext context, Beach beach) {
-    // Check if there's any flora data
     final hasMetrics = floraMetricKeys.any((key) {
       final value = beach.aggregatedMetrics[key];
       if (value == null) return false;
@@ -465,7 +579,6 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildFaunaTab(BuildContext context, Beach beach) {
-    // Check if there's any fauna data
     final hasMetrics = faunaMetricKeys.any((key) {
       final value = beach.aggregatedMetrics[key];
       if (value == null) return false;
@@ -594,11 +707,9 @@ class BeachDetailScreen extends StatelessWidget {
       ..remove('Width')
       ..remove('Length');
 
-    // Check if there's any composition data at all
     final hasWidthOrLength = (beach.aggregatedMetrics['Width'] ?? 0) > 0 ||
         (beach.aggregatedMetrics['Length'] ?? 0) > 0;
 
-    // Filter remaining keys to check if there's any data
     final hasOtherComposition = remainingCompositionKeys.any((key) {
       final value = beach.aggregatedMetrics[key];
       if (value == null) return false;
@@ -607,7 +718,6 @@ class BeachDetailScreen extends StatelessWidget {
       return value > minThreshold;
     });
 
-    // Check for single/multi choice data
     final hasShapeData = beach.aggregatedSingleChoices.containsKey('Shape') &&
         (beach.aggregatedSingleChoices['Shape'] as Map).isNotEmpty;
     final hasBluffCompData = beach.aggregatedMultiChoices.containsKey('Bluff Comp') &&
@@ -615,7 +725,6 @@ class BeachDetailScreen extends StatelessWidget {
     final hasRockTypeData = beach.aggregatedSingleChoices.containsKey('Rock Type') &&
         (beach.aggregatedSingleChoices['Rock Type'] as Map).isNotEmpty;
 
-    // If no data at all in this category
     if (!hasWidthOrLength && !hasOtherComposition && !hasShapeData && !hasBluffCompData && !hasRockTypeData) {
       return Padding(
         padding: const EdgeInsets.all(16.0),
@@ -809,7 +918,6 @@ class BeachDetailScreen extends StatelessWidget {
       final allKnownKeys = [...floraMetricKeys, ...faunaMetricKeys, ...compositionOrderedKeys, ...woodMetricKeys];
       beach.aggregatedMetrics.forEach((key, value) {
         if (!allKnownKeys.contains(key)) {
-          // Check if value is above minimum threshold
           final range = metricRanges[key];
           final minThreshold = range?.min.toDouble() ?? 0.0;
           if (value > minThreshold) {
@@ -821,11 +929,9 @@ class BeachDetailScreen extends StatelessWidget {
       for (final key in keys) {
         final v = beach.aggregatedMetrics[key];
         if (v != null) {
-          // Get the minimum threshold for this metric
           final range = metricRanges[key];
           final minThreshold = range?.min.toDouble() ?? 0.0;
 
-          // Only include if value is above minimum
           if (v > minThreshold) {
             filteredMetrics[key] = v;
           }
@@ -989,7 +1095,6 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
             },
           ),
 
-          // Tap hint overlay - MOVED DOWN 10 pixels (from top: 20 to top: 30)
           Positioned(
             top: 30,
             right: 20,
@@ -999,27 +1104,9 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
                 color: Colors.black.withOpacity(0.6),
                 borderRadius: BorderRadius.circular(20),
               ),
-              /*child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.zoom_in, color: Colors.white, size: 16),
-                  SizedBox(width: 4),
-                  Text(
-                    'Tap to zoom',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),*/
             ),
           ),
 
-          // REMOVED: Contribution count chip (moved to below title)
-
-          // Page indicators (dots at bottom)
           Positioned(
             bottom: 16,
             child: Row(
@@ -1046,9 +1133,6 @@ class _ImageDescriptionCarouselState extends State<ImageDescriptionCarousel> {
   }
 }
 
-// Update to the MetricScaleBar widget in beach_detail_screen.dart
-// Replace the existing MetricScaleBar class (around line 800) with this version:
-
 class MetricScaleBar extends StatelessWidget {
   final String label;
   final double value;
@@ -1069,7 +1153,7 @@ class MetricScaleBar extends StatelessWidget {
     final Color barColor = Color.lerp(Colors.blue, Colors.green, percentage) ?? Colors.grey;
 
     return SizedBox(
-      width: double.infinity, // ADDED: Force full width
+      width: double.infinity,
       child: Card(
         margin: const EdgeInsets.symmetric(vertical: 4),
         clipBehavior: Clip.antiAlias,
@@ -1078,7 +1162,6 @@ class MetricScaleBar extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // CHANGED: Removed the value display, only show label
               Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 8),
               Container(

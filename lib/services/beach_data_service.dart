@@ -1,5 +1,5 @@
 // lib/services/beach_data_service.dart
-// UPDATED VERSION with moderation support
+// UPDATED VERSION with moderation support and delete functionality
 
 import 'dart:convert';
 import 'dart:io';
@@ -196,6 +196,102 @@ class BeachDataService {
     } catch (e) {
       print('Error getting beach by ID $beachId: $e');
       return null;
+    }
+  }
+
+  /// Delete a beach and all its associated data (ADMIN ONLY)
+  Future<void> deleteBeach(String beachId) async {
+    try {
+      final beachRef = _firestore.collection('beaches').doc(beachId);
+
+      // 1. Get the beach data to access image URLs
+      final beachDoc = await beachRef.get();
+      if (!beachDoc.exists) {
+        throw Exception('Beach not found');
+      }
+
+      final beach = Beach.fromFirestore(beachDoc);
+
+      // Track which image URLs we've already deleted to avoid duplicates
+      final Set<String> deletedUrls = {};
+
+      // 2. Delete all beach images from Firebase Storage
+      await _deleteBeachImages(beach.imageUrls, deletedUrls);
+
+      // 3. Get all contributions and delete their images
+      final contributionsSnapshot = await beachRef
+          .collection('contributions')
+          .get();
+
+      for (final contributionDoc in contributionsSnapshot.docs) {
+        final contribution = Contribution.fromFirestore(contributionDoc);
+        await _deleteBeachImages(contribution.contributedImageUrls, deletedUrls);
+        await contributionDoc.reference.delete();
+      }
+
+      // 4. Delete pending contributions if any
+      final pendingContributionsSnapshot = await beachRef
+          .collection('pending_contributions')
+          .get();
+
+      for (final pendingDoc in pendingContributionsSnapshot.docs) {
+        final contribution = Contribution.fromFirestore(pendingDoc);
+        await _deleteBeachImages(contribution.contributedImageUrls, deletedUrls);
+        await pendingDoc.reference.delete();
+      }
+
+      // 5. Finally, delete the beach document
+      await beachRef.delete();
+
+      print('✅ Beach deleted successfully: $beachId');
+      print('🗑️ Total images deleted: ${deletedUrls.length}');
+    } catch (e) {
+      print('❌ Error deleting beach: $e');
+      rethrow;
+    }
+  }
+
+  /// Delete images from Firebase Storage
+  Future<void> _deleteBeachImages(List<String> imageUrls, Set<String> deletedUrls) async {
+    for (final url in imageUrls) {
+      // Skip if we've already deleted this URL
+      if (deletedUrls.contains(url)) {
+        print('⏭️ Skipping already deleted: $url');
+        continue;
+      }
+
+      try {
+        // Parse the storage path from the Firebase URL
+        // URL format: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media&token=...
+        final uri = Uri.parse(url);
+
+        // Extract the encoded path from the 'o' segment
+        final pathSegments = uri.pathSegments;
+        final oIndex = pathSegments.indexOf('o');
+
+        if (oIndex == -1 || oIndex >= pathSegments.length - 1) {
+          print('⚠️ Invalid Firebase Storage URL format: $url');
+          continue;
+        }
+
+        // Get the encoded path and decode it
+        // The path after 'o/' is URL encoded (e.g., beach_images%2Ffile.jpg)
+        final encodedPath = pathSegments.sublist(oIndex + 1).join('/');
+        final decodedPath = Uri.decodeComponent(encodedPath);
+
+        print('🔍 Attempting to delete: $decodedPath');
+
+        // Create reference and delete
+        final ref = _storage.ref().child(decodedPath);
+        await ref.delete();
+        print('🗑️ Successfully deleted: $decodedPath');
+
+        // Mark this URL as deleted
+        deletedUrls.add(url);
+      } catch (e) {
+        // Continue even if image deletion fails (image might already be deleted)
+        print('⚠️ Could not delete image $url: $e');
+      }
     }
   }
 
