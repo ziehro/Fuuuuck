@@ -1,6 +1,4 @@
 // lib/screens/map_screen.dart
-// FIXED VERSION - Added mounted checks to prevent setState after dispose
-
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
@@ -32,6 +30,11 @@ class MapScreen extends StatefulWidget {
     'Kindling','Firewood','Logs','Trees',
     'Anemones','Barnacles','Bugs','Clams','Limpets','Mussels','Oysters','Snails','Turtles',
   };
+
+  static const Set<String> _premiumMetricKeys = {
+    'Water Index',
+    'Shoreline Risk',
+  };
 }
 
 class MapScreenState extends State<MapScreen> {
@@ -53,14 +56,21 @@ class MapScreenState extends State<MapScreen> {
   double _currentZoom = 10.0;
 
   void toggleMarkers() {
-    if (!mounted) return;
     setState(() {
       _showMarkers = !_showMarkers;
     });
   }
 
   void setActiveMetric(String? key) {
-    if (!mounted) return;
+    final settingsService = Provider.of<SettingsService>(context, listen: false);
+
+    if (key != null && MapScreen._premiumMetricKeys.contains(key)) {
+      if (!settingsService.hasPremiumAccess) {
+        _showPremiumAccessDialog();
+        return;
+      }
+    }
+
     setState(() {
       _activeMetricKey = key;
       if (key != null) {
@@ -72,13 +82,61 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void clearHeatmap() {
-    if (!mounted) return;
     setState(() {
       _activeMetricKey = null;
       _showMarkers = true;
       _heatCircles.clear();
       _circleToBeachMap.clear();
     });
+  }
+
+  void _showPremiumAccessDialog() {
+    final TextEditingController codeController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Premium Feature'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('This layer requires premium access.'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: codeController,
+              decoration: const InputDecoration(
+                labelText: 'Access Code',
+                hintText: 'Enter your premium code',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final settingsService = Provider.of<SettingsService>(context, listen: false);
+              final success = await settingsService.validateAndSetPremiumAccess(codeController.text);
+
+              if (success && mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Premium access activated!')),
+                );
+              } else if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Invalid access code')),
+                );
+              }
+            },
+            child: const Text('Activate'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -92,28 +150,20 @@ class MapScreenState extends State<MapScreen> {
       final permission = await Permission.locationWhenInUse.request();
       if (!permission.isGranted) {
         _toast('Location permission is required to find nearby beaches.');
-        if (mounted) {
-          setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
-        }
+        setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
         return;
       }
       final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-      if (mounted) {
-        setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));
-      }
+      setState(() => _currentPosition = LatLng(pos.latitude, pos.longitude));
     } catch (e) {
       _toast('Failed to get current location: $e');
-      if (mounted) {
-        setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
-      }
+      setState(() => _currentPosition = const LatLng(49.2827, -123.1207));
     }
   }
 
   Future<void> _loadBeachesForVisibleRegion() async {
-    if (_mapController == null || !mounted) return;
+    if (_mapController == null) return;
     final visibleBounds = await _safeVisibleRegion(_mapController!);
-    if (!mounted) return;
-
     final beachDataService = Provider.of<BeachDataService>(context, listen: false);
 
     setState(() {
@@ -142,7 +192,6 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onMapCreated(GoogleMapController controller) async {
-    if (!mounted) return;
     _mapController = controller;
     if (_currentPosition != null) {
       controller.animateCamera(CameraUpdate.newLatLngZoom(_currentPosition!, 10));
@@ -160,9 +209,7 @@ class MapScreenState extends State<MapScreen> {
       position.target.latitude, position.target.longitude,
     );
     if (distance > 2000 && !_showSearchAreaButton) {
-      if (mounted) {
-        setState(() => _showSearchAreaButton = true);
-      }
+      setState(() => _showSearchAreaButton = true);
     }
   }
 
@@ -171,7 +218,6 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onCircleTap(String circleId) {
-    if (!mounted) return;
     final beach = _circleToBeachMap[circleId];
     if (beach != null) {
       setState(() => _selectedBeach = beach);
@@ -179,14 +225,12 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(LatLng position) {
-    if (!mounted) return;
     setState(() => _selectedBeach = null);
   }
 
   @override
   void dispose() {
     _mapController?.dispose();
-    _mapController = null;
     super.dispose();
   }
 
@@ -224,28 +268,34 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _rebuildHeatCircles(List<Beach> beaches) {
-    if (!mounted) return;
-
     _heatCircles.clear();
     _circleToBeachMap.clear();
 
     final key = _activeMetricKey;
     if (key == null) {
-      // Don't call setState here - just clear and return
+      setState(() {});
       return;
     }
 
     final range = metricRanges[key];
     double vMin, vMax;
+
+    // Get values from either aggregatedMetrics or direct beach properties
+    final vals = beaches.map((b) {
+      if (key == 'Water Index') return b.waterIndex;
+      if (key == 'Shoreline Risk') return b.shorelineRiskProxy;
+      return b.aggregatedMetrics[key];
+    }).whereType<double>().toList()..sort();
+
+    if (vals.isEmpty) {
+      setState(() {});
+      return;
+    }
+
     if (range != null) {
       vMin = range.min.toDouble();
       vMax = range.max.toDouble();
     } else {
-      final vals = beaches.map((b) => b.aggregatedMetrics[key]).whereType<double>().toList()..sort();
-      if (vals.isEmpty) {
-        // Don't call setState here either
-        return;
-      }
       vMin = vals.first;
       vMax = vals.last;
       if (vMax == vMin) vMax = vMin + 1.0;
@@ -255,7 +305,15 @@ class MapScreenState extends State<MapScreen> {
     const double maxRadius = 800.0;
 
     for (final b in beaches) {
-      final v = b.aggregatedMetrics[key];
+      double? v;
+      if (key == 'Water Index') {
+        v = b.waterIndex;
+      } else if (key == 'Shoreline Risk') {
+        v = b.shorelineRiskProxy;
+      } else {
+        v = b.aggregatedMetrics[key];
+      }
+
       if (v == null) continue;
 
       final normLinear = ((v - vMin) / (vMax - vMin)).clamp(0.0, 1.0);
@@ -286,7 +344,7 @@ class MapScreenState extends State<MapScreen> {
       _circleToBeachMap[circleId] = b;
     }
 
-    // Don't call setState here - the circles will be used in the next build
+    setState(() {});
   }
 
   MapType _getMapType(String style) {
@@ -323,21 +381,12 @@ class MapScreenState extends State<MapScreen> {
 
             final beaches = snapshot.data ?? [];
 
-            // Rebuild heat circles if we have an active metric
-            if (_activeMetricKey != null) {
-              _rebuildHeatCircles(beaches);
-            }
-
             final markers = _showMarkers && _activeMetricKey == null
                 ? beaches
                 .map((b) => Marker(
               markerId: MarkerId(b.id),
               position: LatLng(b.latitude, b.longitude),
-              onTap: () {
-                if (mounted) {
-                  setState(() => _selectedBeach = b);
-                }
-              },
+              onTap: () => setState(() => _selectedBeach = b),
               infoWindow: settingsService.showMarkerLabels
                   ? InfoWindow(title: b.name)
                   : InfoWindow.noText,
@@ -357,9 +406,9 @@ class MapScreenState extends State<MapScreen> {
               onMapCreated: _onMapCreated,
               onCameraMove: (pos) => _onCameraMove(pos),
               onCameraIdle: () async {
-                if (_mapController != null && mounted) {
+                if (_mapController != null) {
                   _currentBounds = await _safeVisibleRegion(_mapController!);
-                  if (_activeMetricKey != null && mounted) {
+                  if (_activeMetricKey != null) {
                     final currentBeaches = beaches;
                     _rebuildHeatCircles(currentBeaches);
                   }
@@ -414,23 +463,8 @@ class MapScreenState extends State<MapScreen> {
                               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                             ),
                           ),
-                          if (_activeMetricKey != null &&
-                              _selectedBeach!.aggregatedMetrics[_activeMetricKey!] != null)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).primaryColor,
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Text(
-                                '${_activeMetricKey!}: ${_selectedBeach!.aggregatedMetrics[_activeMetricKey!]!.toStringAsFixed(1)}',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ),
+                          if (_activeMetricKey != null)
+                            _buildMetricBadge(_selectedBeach!),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -475,6 +509,35 @@ class MapScreenState extends State<MapScreen> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildMetricBadge(Beach beach) {
+    String? displayValue;
+    if (_activeMetricKey == 'Water Index' && beach.waterIndex != null) {
+      displayValue = beach.waterIndex!.toStringAsFixed(1);
+    } else if (_activeMetricKey == 'Shoreline Risk' && beach.shorelineRiskProxy != null) {
+      displayValue = beach.shorelineRiskProxy!.toStringAsFixed(1);
+    } else if (beach.aggregatedMetrics[_activeMetricKey!] != null) {
+      displayValue = beach.aggregatedMetrics[_activeMetricKey!]!.toStringAsFixed(1);
+    }
+
+    if (displayValue == null) return const SizedBox.shrink();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).primaryColor,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        '${_activeMetricKey!}: $displayValue',
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontSize: 12,
+        ),
+      ),
     );
   }
 

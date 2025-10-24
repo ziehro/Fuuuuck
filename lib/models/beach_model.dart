@@ -26,6 +26,8 @@ class Beach {
   final Map<String, dynamic> identifiedBeachComposition;
   final List<String> discoveryQuestions;
   final String educationalInfo;
+  final double? waterIndex;
+  final double? shorelineRiskProxy;
 
   Beach({
     required this.id,
@@ -37,7 +39,7 @@ class Beach {
     required this.province,
     required this.municipality,
     required this.description,
-    required this.aiDescription, // <-- CORRECTED: Added to constructor
+    required this.aiDescription,
     required this.imageUrls,
     required this.contributedDescriptions,
     required this.timestamp,
@@ -52,6 +54,8 @@ class Beach {
     required this.identifiedBeachComposition,
     required this.discoveryQuestions,
     required this.educationalInfo,
+    this.waterIndex,
+    this.shorelineRiskProxy,
   });
 
   Map<String, dynamic> toMap() {
@@ -79,6 +83,8 @@ class Beach {
       'identifiedBeachComposition': identifiedBeachComposition,
       'discoveryQuestions': discoveryQuestions,
       'educationalInfo': educationalInfo,
+      if (waterIndex != null) 'waterIndex': waterIndex,
+      if (shorelineRiskProxy != null) 'shorelineRiskProxy': shorelineRiskProxy,
     };
   }
 
@@ -100,8 +106,8 @@ class Beach {
       timestamp: data['timestamp'] ?? Timestamp.now(),
       lastAggregated: data['lastAggregated'] ?? Timestamp.now(),
       totalContributions: data['totalContributions'] ?? 0,
-      // The new, corrected line:
-      aggregatedMetrics: Map<String, num>.from(data['aggregatedMetrics'] ?? {}).map((key, value) => MapEntry(key, value.toDouble())),aggregatedSingleChoices: Map<String, dynamic>.from(data['aggregatedSingleChoices'] ?? {}),
+      aggregatedMetrics: Map<String, num>.from(data['aggregatedMetrics'] ?? {}).map((key, value) => MapEntry(key, value.toDouble())),
+      aggregatedSingleChoices: Map<String, dynamic>.from(data['aggregatedSingleChoices'] ?? {}),
       aggregatedMultiChoices: Map<String, dynamic>.from(data['aggregatedMultiChoices'] ?? {}),
       aggregatedTextItems: Map<String, List<dynamic>>.from(data['aggregatedTextItems'] ?? {}),
       identifiedFloraFauna: Map<String, dynamic>.from(data['identifiedFloraFauna'] ?? {}),
@@ -109,6 +115,8 @@ class Beach {
       identifiedBeachComposition: Map<String, dynamic>.from(data['identifiedBeachComposition'] ?? {}),
       discoveryQuestions: List<String>.from(data['discoveryQuestions'] ?? []),
       educationalInfo: data['educationalInfo'] ?? '',
+      waterIndex: data['waterIndex']?.toDouble(),
+      shorelineRiskProxy: data['shorelineRiskProxy']?.toDouble(),
     );
   }
 }

@@ -7,23 +7,17 @@ class SettingsService extends ChangeNotifier {
   factory SettingsService() => _instance;
   SettingsService._internal();
 
-  // Map Settings
   String _mapStyle = 'normal';
   bool _showMarkerLabels = true;
   double _defaultZoomLevel = 10.0;
-
-  // Data & Sync Settings
   bool _autoSyncEnabled = true;
   bool _offlineModeEnabled = false;
-
-  // Notifications & Feedback
   bool _notificationsEnabled = false;
   bool _enableHapticFeedback = true;
-
-  // Measurements
   String _measurementUnit = 'Steps';
+  String? _premiumAccessCode;
+  DateTime? _premiumAccessExpiry;
 
-  // Getters
   String get mapStyle => _mapStyle;
   bool get showMarkerLabels => _showMarkerLabels;
   double get defaultZoomLevel => _defaultZoomLevel;
@@ -33,7 +27,11 @@ class SettingsService extends ChangeNotifier {
   bool get enableHapticFeedback => _enableHapticFeedback;
   String get measurementUnit => _measurementUnit;
 
-  // Initialize settings from storage
+  bool get hasPremiumAccess {
+    if (_premiumAccessExpiry == null) return false;
+    return DateTime.now().isBefore(_premiumAccessExpiry!);
+  }
+
   Future<void> loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -45,11 +43,48 @@ class SettingsService extends ChangeNotifier {
     _notificationsEnabled = prefs.getBool('notificationsEnabled') ?? false;
     _enableHapticFeedback = prefs.getBool('enableHapticFeedback') ?? true;
     _measurementUnit = prefs.getString('measurementUnit') ?? 'Steps';
+    _premiumAccessCode = prefs.getString('premiumAccessCode');
+    final expiryString = prefs.getString('premiumAccessExpiry');
+    if (expiryString != null) {
+      _premiumAccessExpiry = DateTime.tryParse(expiryString);
+    }
 
     notifyListeners();
   }
 
-  // Map Settings Setters
+  Future<bool> validateAndSetPremiumAccess(String code) async {
+    // Hardcoded codes with expiry dates - you can modify these as needed
+    final Map<String, DateTime> validCodes = {
+      'BEACH2025': DateTime(2025, 12, 31),
+      'PREMIUM30': DateTime.now().add(const Duration(days: 30)),
+      'TRIAL7': DateTime.now().add(const Duration(days: 7)),
+    };
+
+    if (validCodes.containsKey(code)) {
+      _premiumAccessCode = code;
+      _premiumAccessExpiry = validCodes[code]!;
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('premiumAccessCode', code);
+      await prefs.setString('premiumAccessExpiry', _premiumAccessExpiry!.toIso8601String());
+
+      notifyListeners();
+      return true;
+    }
+    return false;
+  }
+
+  Future<void> clearPremiumAccess() async {
+    _premiumAccessCode = null;
+    _premiumAccessExpiry = null;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('premiumAccessCode');
+    await prefs.remove('premiumAccessExpiry');
+
+    notifyListeners();
+  }
+
   Future<void> setMapStyle(String style) async {
     _mapStyle = style;
     final prefs = await SharedPreferences.getInstance();
@@ -71,7 +106,6 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Data & Sync Setters
   Future<void> setAutoSyncEnabled(bool value) async {
     _autoSyncEnabled = value;
     final prefs = await SharedPreferences.getInstance();
@@ -86,7 +120,6 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Notifications & Feedback Setters
   Future<void> setNotificationsEnabled(bool value) async {
     _notificationsEnabled = value;
     final prefs = await SharedPreferences.getInstance();
@@ -101,7 +134,6 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Measurements Setter
   Future<void> setMeasurementUnit(String value) async {
     _measurementUnit = value;
     final prefs = await SharedPreferences.getInstance();
@@ -109,9 +141,7 @@ class SettingsService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Clear all cached data
   Future<void> clearCache() async {
-    // This will be implemented with actual cache clearing logic
-    // For now, just a placeholder
+    // Placeholder for cache clearing logic
   }
 }

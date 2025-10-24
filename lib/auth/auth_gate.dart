@@ -15,6 +15,8 @@ import 'package:mybeachbook/screens/add_beach_screen.dart';
 import 'package:mybeachbook/screens/settings_screen.dart';
 import 'package:mybeachbook/screens/moderation_screen.dart';
 
+import '../services/settings_service.dart';
+
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -179,6 +181,8 @@ class _MyAppContentState extends State<MyAppContent> {
       );
 
       actions.add(
+        // In _getAppBarActions() method, replace the layers PopupMenuButton with:
+
         PopupMenuButton<String?>(
           tooltip: 'Heatmap layer',
           icon: const Icon(Icons.layers),
@@ -186,18 +190,56 @@ class _MyAppContentState extends State<MyAppContent> {
             _mapScreenKey.currentState?.setActiveMetric(val);
           },
           itemBuilder: (context) {
-            final keys = MapScreen.getMetricKeys().toList()
+            final settingsService = Provider.of<SettingsService>(context, listen: false);
+            final standardKeys = MapScreen.getMetricKeys().toList()
               ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
             return <PopupMenuEntry<String?>>[
               const PopupMenuItem<String?>(
                 value: null,
                 child: Text('None'),
               ),
               const PopupMenuDivider(),
-              ...keys.map((k) => PopupMenuItem<String?>(
+              const PopupMenuItem<String?>(
+                enabled: false,
+                child: Text('Standard Layers', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              ...standardKeys.map((k) => PopupMenuItem<String?>(
                 value: k,
                 child: Text(k),
               )),
+              const PopupMenuDivider(),
+              PopupMenuItem<String?>(
+                enabled: false,
+                child: Row(
+                  children: [
+                    const Text('Premium Layers', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(width: 8),
+                    if (settingsService.hasPremiumAccess)
+                      const Icon(Icons.check_circle, color: Colors.green, size: 16),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String?>(
+                value: 'Water Index',
+                child: Row(
+                  children: [
+                    Text('Water Index'),
+                    Spacer(),
+                    Icon(Icons.lock, size: 16),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String?>(
+                value: 'Shoreline Risk',
+                child: Row(
+                  children: [
+                    Text('Shoreline Risk'),
+                    Spacer(),
+                    Icon(Icons.lock, size: 16),
+                  ],
+                ),
+              ),
             ];
           },
         ),
