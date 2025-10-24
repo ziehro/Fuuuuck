@@ -1,8 +1,8 @@
 // lib/util/metric_ranges.dart
 
 class MetricRange {
-  final int min;
-  final int max;
+  final double min;
+  final double max;
 
   const MetricRange(this.min, this.max);
 }
@@ -47,6 +47,6 @@ const Map<String, MetricRange> metricRanges = {
   'People': MetricRange(0, 5),
   'Width':  MetricRange(0, 300),
   'Length': MetricRange(0, 2000),
-  'Water Index': MetricRange(-1, 1),
-  'Shoreline Risk': MetricRange(0, 1),
+  'Water Index': MetricRange(0, 100),
+  'Shoreline Risk': MetricRange(0, 0.5),
 };
