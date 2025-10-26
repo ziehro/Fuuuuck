@@ -1,5 +1,5 @@
 // lib/services/beach_data_service.dart
-// UPDATED VERSION with moderation support and delete functionality
+// UPDATED VERSION with moderation support, delete functionality, and single image deletion
 
 import 'dart:convert';
 import 'dart:io';
@@ -199,6 +199,34 @@ class BeachDataService {
     }
   }
 
+  /// Delete a single image from a beach (ADMIN ONLY)
+  Future<void> deleteBeachImage(String beachId, String imageUrl) async {
+    try {
+      final beachRef = _firestore.collection('beaches').doc(beachId);
+
+      // 1. Try to delete the image from Firebase Storage
+      // If it fails (image doesn't exist), we still want to clean up the reference
+      try {
+        await _deleteSingleImage(imageUrl);
+        print('✅ Image deleted from storage successfully');
+      } catch (storageError) {
+        print('⚠️ Could not delete image from storage (may already be deleted): $storageError');
+        // Continue anyway to clean up the database reference
+      }
+
+      // 2. Remove the image URL from the beach document
+      // This happens regardless of storage deletion success
+      await beachRef.update({
+        'imageUrls': FieldValue.arrayRemove([imageUrl])
+      });
+
+      print('✅ Image reference removed from beach $beachId');
+    } catch (e) {
+      print('❌ Error deleting beach image: $e');
+      rethrow;
+    }
+  }
+
   /// Delete a beach and all its associated data (ADMIN ONLY)
   Future<void> deleteBeach(String beachId) async {
     try {
@@ -251,6 +279,38 @@ class BeachDataService {
     }
   }
 
+  /// Delete a single image from Firebase Storage
+  Future<void> _deleteSingleImage(String url) async {
+    try {
+      // Parse the storage path from the Firebase URL
+      // URL format: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media&token=...
+      final uri = Uri.parse(url);
+
+      // Extract the encoded path from the 'o' segment
+      final pathSegments = uri.pathSegments;
+      final oIndex = pathSegments.indexOf('o');
+
+      if (oIndex == -1 || oIndex >= pathSegments.length - 1) {
+        throw Exception('Invalid Firebase Storage URL format: $url');
+      }
+
+      // Get the encoded path and decode it
+      // The path after 'o/' is URL encoded (e.g., beach_images%2Ffile.jpg)
+      final encodedPath = pathSegments.sublist(oIndex + 1).join('/');
+      final decodedPath = Uri.decodeComponent(encodedPath);
+
+      print('🔍 Attempting to delete: $decodedPath');
+
+      // Create reference and delete
+      final ref = _storage.ref().child(decodedPath);
+      await ref.delete();
+      print('🗑️ Successfully deleted: $decodedPath');
+    } catch (e) {
+      print('⚠️ Could not delete image $url: $e');
+      rethrow;
+    }
+  }
+
   /// Delete images from Firebase Storage
   Future<void> _deleteBeachImages(List<String> imageUrls, Set<String> deletedUrls) async {
     for (final url in imageUrls) {
@@ -261,31 +321,7 @@ class BeachDataService {
       }
 
       try {
-        // Parse the storage path from the Firebase URL
-        // URL format: https://firebasestorage.googleapis.com/v0/b/BUCKET/o/PATH?alt=media&token=...
-        final uri = Uri.parse(url);
-
-        // Extract the encoded path from the 'o' segment
-        final pathSegments = uri.pathSegments;
-        final oIndex = pathSegments.indexOf('o');
-
-        if (oIndex == -1 || oIndex >= pathSegments.length - 1) {
-          print('⚠️ Invalid Firebase Storage URL format: $url');
-          continue;
-        }
-
-        // Get the encoded path and decode it
-        // The path after 'o/' is URL encoded (e.g., beach_images%2Ffile.jpg)
-        final encodedPath = pathSegments.sublist(oIndex + 1).join('/');
-        final decodedPath = Uri.decodeComponent(encodedPath);
-
-        print('🔍 Attempting to delete: $decodedPath');
-
-        // Create reference and delete
-        final ref = _storage.ref().child(decodedPath);
-        await ref.delete();
-        print('🗑️ Successfully deleted: $decodedPath');
-
+        await _deleteSingleImage(url);
         // Mark this URL as deleted
         deletedUrls.add(url);
       } catch (e) {

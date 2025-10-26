@@ -189,6 +189,162 @@ class BeachDetailScreen extends StatelessWidget {
     );
   }
 
+  Future<void> _showDeleteImageDialog(BuildContext context, String beachId, List<String> imageUrls) async {
+    if (imageUrls.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No images to delete'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    // Show selection dialog
+    final selectedIndex = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.image, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text('Select Image to Delete'),
+          ],
+        ),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: imageUrls.length,
+            itemBuilder: (context, index) {
+              return Card(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                child: ListTile(
+                  leading: Image.network(
+                    imageUrls[index],
+                    width: 60,
+                    height: 60,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) =>
+                    const Icon(Icons.broken_image, size: 60),
+                  ),
+                  title: Text('Image ${index + 1}'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.pop(context, index),
+                ),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (selectedIndex == null) return;
+
+    // Show confirmation dialog
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.warning, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text('Delete Image?'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'This action is PERMANENT and cannot be undone!',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.orange,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text('Delete image #${selectedIndex + 1} from this beach?'),
+            const SizedBox(height: 8),
+            const Text('The image will be permanently deleted from storage.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: const Text('DELETE IMAGE'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _deleteImage(context, beachId, imageUrls[selectedIndex]);
+    }
+  }
+
+  Future<void> _deleteImage(BuildContext context, String beachId, String imageUrl) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const AlertDialog(
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(),
+            SizedBox(height: 16),
+            Text('Deleting image...'),
+          ],
+        ),
+      ),
+    );
+
+    try {
+      final beachDataService = Provider.of<BeachDataService>(context, listen: false);
+      await beachDataService.deleteBeachImage(beachId, imageUrl);
+
+      // Close loading dialog
+      if (context.mounted) Navigator.pop(context);
+
+      // Show success message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Image deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (context.mounted) Navigator.pop(context);
+
+      // Show error message
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete image: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _showDeleteBeachDialog(BuildContext context, String beachId, String beachName) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -371,11 +527,55 @@ class BeachDetailScreen extends StatelessWidget {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.only(top: 10),
-                        child: IconButton(
-                          icon: const Icon(Icons.delete_forever, color: Colors.red),
-                          tooltip: 'Delete Beach',
-                          onPressed: () => _showDeleteBeachDialog(context, beachId, beach.name),
+                        padding: const EdgeInsets.only(right: 4),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.image, color: Colors.orange, size: 20),
+                              tooltip: 'Delete Image',
+                              onPressed: () => _showDeleteImageDialog(context, beachId, beach.imageUrls),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            const Text(
+                              'Image',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 7,
+                                fontWeight: FontWeight.w500,
+                                height: 0.9,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
+                              tooltip: 'Delete Beach',
+                              onPressed: () => _showDeleteBeachDialog(context, beachId, beach.name),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            const Text(
+                              'Beach',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 7,
+                                fontWeight: FontWeight.w500,
+                                height: 0.9,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ]
