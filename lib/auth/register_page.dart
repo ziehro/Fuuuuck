@@ -6,7 +6,7 @@ import 'package:mybeachbook/main.dart';
 
 // Import the beachy theme colors
 // These are already defined in main.dart, so we just reference them
-
+// hats
 class RegisterPage extends StatefulWidget {
   final VoidCallback? onLoginTap;
 
