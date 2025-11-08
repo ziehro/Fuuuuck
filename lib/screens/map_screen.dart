@@ -64,6 +64,11 @@ class MapScreenState extends State<MapScreen> {
   LatLng? _newBeachPosition;
   bool _isMovingBeach = false;
 
+  // Cached marker icons to prevent flickering
+  static final BitmapDescriptor _defaultMarker = BitmapDescriptor.defaultMarker;
+  static final BitmapDescriptor _greenMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
+  static final BitmapDescriptor _orangeMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
+
   // Admin check
   bool get _isAdmin {
     final currentUser = FirebaseAuth.instance.currentUser;
@@ -266,49 +271,42 @@ class MapScreenState extends State<MapScreen> {
   Future<void> _submitMoveBeach() async {
     if (_beachBeingMoved == null || _newBeachPosition == null) return;
 
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Move Beach Pin?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Beach: ${_beachBeingMoved!.name}'),
-            const SizedBox(height: 8),
-            Text('Old location: ${_beachBeingMoved!.latitude.toStringAsFixed(6)}, ${_beachBeingMoved!.longitude.toStringAsFixed(6)}'),
-            const SizedBox(height: 4),
-            Text('New location: ${_newBeachPosition!.latitude.toStringAsFixed(6)}, ${_newBeachPosition!.longitude.toStringAsFixed(6)}'),
-            const SizedBox(height: 12),
-            const Text(
-              'This will permanently update the beach coordinates in Firebase.',
-              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.orange),
-            child: const Text('Move Pin'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true) {
-      await _updateBeachLocation();
-    }
+    // Set state BEFORE updating Firebase to prevent flickering
+    final beachId = _beachBeingMoved!.id;
+    final newPosition = _newBeachPosition!;
 
     setState(() {
       _beachBeingMoved = null;
       _newBeachPosition = null;
       _isMovingBeach = false;
     });
+
+    // Now update Firebase
+    _toast('Updating beach location...');
+
+    try {
+      final geoHasher = GeoHasher();
+      final newGeohash = geoHasher.encode(
+        newPosition.longitude,
+        newPosition.latitude,
+        precision: 9,
+      );
+
+      await FirebaseFirestore.instance
+          .collection('beaches')
+          .doc(beachId)
+          .update({
+        'latitude': newPosition.latitude,
+        'longitude': newPosition.longitude,
+        'geohash': newGeohash,
+        'locationRefined': true,
+        'locationRefinedAt': FieldValue.serverTimestamp(),
+      });
+
+      _toast('Beach location updated successfully!');
+    } catch (e) {
+      _toast('Failed to update location: $e');
+    }
   }
 
   void _cancelMoveBeach() {
@@ -318,36 +316,6 @@ class MapScreenState extends State<MapScreen> {
       _isMovingBeach = false;
     });
     _toast('Move cancelled');
-  }
-
-  Future<void> _updateBeachLocation() async {
-    if (_beachBeingMoved == null || _newBeachPosition == null) return;
-
-    _toast('Updating beach location...');
-
-    try {
-      // Calculate new geohash
-      final geoHasher = GeoHasher();
-      final newGeohash = geoHasher.encode(
-        _newBeachPosition!.longitude,
-        _newBeachPosition!.latitude,
-        precision: 9,
-      );
-
-      // Update in Firebase
-      await FirebaseFirestore.instance
-          .collection('beaches')
-          .doc(_beachBeingMoved!.id)
-          .update({
-        'latitude': _newBeachPosition!.latitude,
-        'longitude': _newBeachPosition!.longitude,
-        'geohash': newGeohash,
-      });
-
-      _toast('Beach location updated successfully!');
-    } catch (e) {
-      _toast('Failed to update location: $e');
-    }
   }
 
   @override
@@ -395,7 +363,6 @@ class MapScreenState extends State<MapScreen> {
 
     final key = _activeMetricKey;
     if (key == null) {
-      setState(() {});
       return;
     }
 
@@ -410,7 +377,6 @@ class MapScreenState extends State<MapScreen> {
     }).whereType<double>().toList()..sort();
 
     if (vals.isEmpty) {
-      setState(() {});
       return;
     }
 
@@ -465,8 +431,6 @@ class MapScreenState extends State<MapScreen> {
 
       _circleToBeachMap[circleId] = b;
     }
-
-    setState(() {});
   }
 
   MapType _getMapType(String style) {
@@ -514,6 +478,7 @@ class MapScreenState extends State<MapScreen> {
                     markerId: MarkerId(b.id),
                     position: LatLng(b.latitude, b.longitude),
                     onTap: () => setState(() => _selectedBeach = b),
+                    icon: (b.locationRefined ?? false) ? _greenMarker : _defaultMarker,
                     infoWindow: settingsService.showMarkerLabels
                         ? InfoWindow(title: b.name)
                         : InfoWindow.noText,
@@ -526,7 +491,7 @@ class MapScreenState extends State<MapScreen> {
             if (_isMovingBeach && _newBeachPosition != null && _beachBeingMoved != null) {
               markers.add(
                 Marker(
-                  markerId: MarkerId('moving_${_beachBeingMoved!.id}'), // Use beach ID for stability
+                  markerId: MarkerId('moving_${_beachBeingMoved!.id}'),
                   position: _newBeachPosition!,
                   draggable: true,
                   onDragEnd: (newPosition) {
@@ -534,15 +499,16 @@ class MapScreenState extends State<MapScreen> {
                       _newBeachPosition = newPosition;
                     });
                   },
-                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
-                  zIndex: 1000, // Keep it on top
+                  icon: _orangeMarker,
+                  zIndex: 1000,
                 ),
               );
             }
 
-            WidgetsBinding.instance.addPostFrameCallback((_) {
+            // Rebuild heat circles only when active metric is set
+            if (_activeMetricKey != null) {
               _rebuildHeatCircles(beaches);
-            });
+            }
 
             return GoogleMap(
               initialCameraPosition: CameraPosition(
@@ -563,13 +529,13 @@ class MapScreenState extends State<MapScreen> {
               onTap: _onMapTap,
               markers: markers,
               circles: _heatCircles,
-              myLocationEnabled: !_isMovingBeach,
-              myLocationButtonEnabled: !_isMovingBeach,
+              myLocationEnabled: true,
+              myLocationButtonEnabled: true,
               zoomControlsEnabled: false,
-              zoomGesturesEnabled: !_isMovingBeach,
-              scrollGesturesEnabled: !_isMovingBeach,
-              rotateGesturesEnabled: !_isMovingBeach,
-              tiltGesturesEnabled: !_isMovingBeach,
+              zoomGesturesEnabled: true,
+              scrollGesturesEnabled: true,
+              rotateGesturesEnabled: true,
+              tiltGesturesEnabled: true,
               mapType: _getMapType(settingsService.mapStyle),
             );
           },

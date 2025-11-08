@@ -28,6 +28,8 @@ class Beach {
   final String educationalInfo;
   final double? waterIndex;
   final double? shorelineRiskProxy;
+  final bool? locationRefined;
+  final DateTime? locationRefinedAt;
 
   Beach({
     required this.id,
@@ -56,6 +58,8 @@ class Beach {
     required this.educationalInfo,
     this.waterIndex,
     this.shorelineRiskProxy,
+    this.locationRefined,
+    this.locationRefinedAt,
   });
 
   Map<String, dynamic> toMap() {
@@ -117,6 +121,10 @@ class Beach {
       educationalInfo: data['educationalInfo'] ?? '',
       waterIndex: data['waterIndex']?.toDouble(),
       shorelineRiskProxy: data['shorelineRiskProxy']?.toDouble(),
+      locationRefined: data['locationRefined'] as bool?,
+      locationRefinedAt: data['locationRefinedAt'] != null
+          ? (data['locationRefinedAt'] as Timestamp).toDate()
+          : null,
     );
   }
 }
