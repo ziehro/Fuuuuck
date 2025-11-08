@@ -7,6 +7,9 @@ import 'package:provider/provider.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:mybeachbook/main.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:dart_geohash/dart_geohash.dart';
 
 import 'package:mybeachbook/services/beach_data_service.dart';
 import 'package:mybeachbook/services/settings_service.dart';
@@ -15,6 +18,7 @@ import 'package:mybeachbook/screens/add_beach_screen.dart';
 import 'package:mybeachbook/screens/beach_detail_screen.dart';
 import 'package:mybeachbook/screens/migration_screen.dart';
 import 'package:mybeachbook/util/metric_ranges.dart';
+import 'package:mybeachbook/util/constants.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -54,6 +58,17 @@ class MapScreenState extends State<MapScreen> {
   final Map<String, Beach> _circleToBeachMap = {};
 
   double _currentZoom = 10.0;
+
+  // Beach moving state
+  Beach? _beachBeingMoved;
+  LatLng? _newBeachPosition;
+  bool _isMovingBeach = false;
+
+  // Admin check
+  bool get _isAdmin {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    return currentUser != null && AppConstants.adminUserIds.contains(currentUser.uid);
+  }
 
   void toggleMarkers() {
     setState(() {
@@ -225,7 +240,114 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(LatLng position) {
-    setState(() => _selectedBeach = null);
+    if (_isMovingBeach) {
+      // If moving, update the position
+      setState(() {
+        _newBeachPosition = position;
+      });
+    } else {
+      // Otherwise, deselect beach
+      setState(() => _selectedBeach = null);
+    }
+  }
+
+  // Beach moving functionality - initiated by button click
+  void _startMovingBeach(Beach beach) {
+    setState(() {
+      _beachBeingMoved = beach;
+      _newBeachPosition = LatLng(beach.latitude, beach.longitude);
+      _isMovingBeach = true;
+      _selectedBeach = null; // Clear selected beach
+    });
+
+    _toast('Tap on map or drag orange pin to new location');
+  }
+
+  Future<void> _submitMoveBeach() async {
+    if (_beachBeingMoved == null || _newBeachPosition == null) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Move Beach Pin?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Beach: ${_beachBeingMoved!.name}'),
+            const SizedBox(height: 8),
+            Text('Old location: ${_beachBeingMoved!.latitude.toStringAsFixed(6)}, ${_beachBeingMoved!.longitude.toStringAsFixed(6)}'),
+            const SizedBox(height: 4),
+            Text('New location: ${_newBeachPosition!.latitude.toStringAsFixed(6)}, ${_newBeachPosition!.longitude.toStringAsFixed(6)}'),
+            const SizedBox(height: 12),
+            const Text(
+              'This will permanently update the beach coordinates in Firebase.',
+              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.orange),
+            child: const Text('Move Pin'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _updateBeachLocation();
+    }
+
+    setState(() {
+      _beachBeingMoved = null;
+      _newBeachPosition = null;
+      _isMovingBeach = false;
+    });
+  }
+
+  void _cancelMoveBeach() {
+    setState(() {
+      _beachBeingMoved = null;
+      _newBeachPosition = null;
+      _isMovingBeach = false;
+    });
+    _toast('Move cancelled');
+  }
+
+  Future<void> _updateBeachLocation() async {
+    if (_beachBeingMoved == null || _newBeachPosition == null) return;
+
+    _toast('Updating beach location...');
+
+    try {
+      // Calculate new geohash
+      final geoHasher = GeoHasher();
+      final newGeohash = geoHasher.encode(
+        _newBeachPosition!.longitude,
+        _newBeachPosition!.latitude,
+        precision: 9,
+      );
+
+      // Update in Firebase
+      await FirebaseFirestore.instance
+          .collection('beaches')
+          .doc(_beachBeingMoved!.id)
+          .update({
+        'latitude': _newBeachPosition!.latitude,
+        'longitude': _newBeachPosition!.longitude,
+        'geohash': newGeohash,
+      });
+
+      _toast('Beach location updated successfully!');
+    } catch (e) {
+      _toast('Failed to update location: $e');
+    }
   }
 
   @override
@@ -381,18 +503,42 @@ class MapScreenState extends State<MapScreen> {
 
             final beaches = snapshot.data ?? [];
 
-            final markers = _showMarkers && _activeMetricKey == null
-                ? beaches
-                .map((b) => Marker(
-              markerId: MarkerId(b.id),
-              position: LatLng(b.latitude, b.longitude),
-              onTap: () => setState(() => _selectedBeach = b),
-              infoWindow: settingsService.showMarkerLabels
-                  ? InfoWindow(title: b.name)
-                  : InfoWindow.noText,
-            ))
-                .toSet()
-                : <Marker>{};
+            // Build markers set
+            final markers = <Marker>{};
+
+            // Add regular beach markers (only when not moving)
+            if (_showMarkers && _activeMetricKey == null && !_isMovingBeach) {
+              for (final b in beaches) {
+                markers.add(
+                  Marker(
+                    markerId: MarkerId(b.id),
+                    position: LatLng(b.latitude, b.longitude),
+                    onTap: () => setState(() => _selectedBeach = b),
+                    infoWindow: settingsService.showMarkerLabels
+                        ? InfoWindow(title: b.name)
+                        : InfoWindow.noText,
+                  ),
+                );
+              }
+            }
+
+            // Add the orange draggable marker for moving (separate from beach markers)
+            if (_isMovingBeach && _newBeachPosition != null && _beachBeingMoved != null) {
+              markers.add(
+                Marker(
+                  markerId: MarkerId('moving_${_beachBeingMoved!.id}'), // Use beach ID for stability
+                  position: _newBeachPosition!,
+                  draggable: true,
+                  onDragEnd: (newPosition) {
+                    setState(() {
+                      _newBeachPosition = newPosition;
+                    });
+                  },
+                  icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+                  zIndex: 1000, // Keep it on top
+                ),
+              );
+            }
 
             WidgetsBinding.instance.addPostFrameCallback((_) {
               _rebuildHeatCircles(beaches);
@@ -417,13 +563,76 @@ class MapScreenState extends State<MapScreen> {
               onTap: _onMapTap,
               markers: markers,
               circles: _heatCircles,
-              myLocationEnabled: true,
-              myLocationButtonEnabled: true,
+              myLocationEnabled: !_isMovingBeach,
+              myLocationButtonEnabled: !_isMovingBeach,
               zoomControlsEnabled: false,
+              zoomGesturesEnabled: !_isMovingBeach,
+              scrollGesturesEnabled: !_isMovingBeach,
+              rotateGesturesEnabled: !_isMovingBeach,
+              tiltGesturesEnabled: !_isMovingBeach,
               mapType: _getMapType(settingsService.mapStyle),
             );
           },
         ),
+
+        // Moving beach controls overlay
+        if (_isMovingBeach && _beachBeingMoved != null)
+          Positioned(
+            top: 10,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Card(
+                color: Colors.orange.shade100,
+                elevation: 8,
+                child: Padding(
+                  padding: const EdgeInsets.all(12.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Moving: ${_beachBeingMoved!.name}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Tap on map or drag the orange pin',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ElevatedButton.icon(
+                            onPressed: _cancelMoveBeach,
+                            icon: const Icon(Icons.close),
+                            label: const Text('Cancel'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.grey,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: _submitMoveBeach,
+                            icon: const Icon(Icons.check),
+                            label: const Text('Submit'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
 
         if (_activeMetricKey != null)
           Positioned(
@@ -433,50 +642,78 @@ class MapScreenState extends State<MapScreen> {
             child: _LegendBar(label: _activeMetricKey!),
           ),
 
-        if (_selectedBeach != null)
+        // Selected beach info card with Move Pin button
+        if (_selectedBeach != null && !_isMovingBeach)
           Positioned(
             bottom: 100,
             left: 20,
             right: 20,
-            child: GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => BeachDetailScreen(beachId: _selectedBeach!.id)),
-                );
-              },
-              child: Card(
-                elevation: 5,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              _selectedBeach!.name,
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            child: Card(
+              elevation: 5,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(15)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            _selectedBeach!.name,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        if (_activeMetricKey != null)
+                          _buildMetricBadge(_selectedBeach!),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(_selectedBeach!.description, maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => BeachDetailScreen(beachId: _selectedBeach!.id),
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.info_outline, size: 18),
+                            label: const Text('View Details'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Theme.of(context).primaryColor,
+                              foregroundColor: Colors.white,
                             ),
                           ),
-                          if (_activeMetricKey != null)
-                            _buildMetricBadge(_selectedBeach!),
+                        ),
+                        if (_isAdmin) ...[
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed: () => _startMovingBeach(_selectedBeach!),
+                            icon: const Icon(Icons.location_searching, size: 18),
+                            label: const Text('Move Pin'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
                         ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(_selectedBeach!.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    ],
-                  ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
 
-        if (_showSearchAreaButton)
+        if (_showSearchAreaButton && !_isMovingBeach)
           Positioned(
             top: 10,
             left: 0,
@@ -494,20 +731,21 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        Positioned(
-          top: 8,
-          left: 8,
-          child: FloatingActionButton.small(
-            heroTag: 'mapStyleButton',
-            backgroundColor: Colors.white,
-            onPressed: () => _showQuickMapStylePicker(settingsService),
-            tooltip: 'Change Map Style',
-            child: Icon(
-              _getMapStyleIcon(settingsService.mapStyle),
-              color: Theme.of(context).primaryColor,
+        if (!_isMovingBeach)
+          Positioned(
+            top: 8,
+            left: 8,
+            child: FloatingActionButton.small(
+              heroTag: 'mapStyleButton',
+              backgroundColor: Colors.white,
+              onPressed: () => _showQuickMapStylePicker(settingsService),
+              tooltip: 'Change Map Style',
+              child: Icon(
+                _getMapStyleIcon(settingsService.mapStyle),
+                color: Theme.of(context).primaryColor,
+              ),
             ),
           ),
-        ),
       ],
     );
   }
