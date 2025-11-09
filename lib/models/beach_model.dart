@@ -30,6 +30,7 @@ class Beach {
   final double? shorelineRiskProxy;
   final bool? locationRefined;
   final DateTime? locationRefinedAt;
+  final String? waterBodyType;
 
   Beach({
     required this.id,
@@ -60,6 +61,7 @@ class Beach {
     this.shorelineRiskProxy,
     this.locationRefined,
     this.locationRefinedAt,
+    this.waterBodyType,
   });
 
   Map<String, dynamic> toMap() {
@@ -87,6 +89,7 @@ class Beach {
       'identifiedBeachComposition': identifiedBeachComposition,
       'discoveryQuestions': discoveryQuestions,
       'educationalInfo': educationalInfo,
+      if (waterBodyType != null) 'waterBodyType': waterBodyType,
       if (waterIndex != null) 'waterIndex': waterIndex,
       if (shorelineRiskProxy != null) 'shorelineRiskProxy': shorelineRiskProxy,
     };
@@ -125,6 +128,7 @@ class Beach {
       locationRefinedAt: data['locationRefinedAt'] != null
           ? (data['locationRefinedAt'] as Timestamp).toDate()
           : null,
+      waterBodyType: data['waterBodyType'] as String?,
     );
   }
 }

@@ -63,6 +63,7 @@ class MapScreenState extends State<MapScreen> {
   Beach? _beachBeingMoved;
   LatLng? _newBeachPosition;
   bool _isMovingBeach = false;
+  String _selectedWaterBodyType = 'tidal'; // Default value
 
   // Cached marker icons to prevent flickering
   static final BitmapDescriptor _defaultMarker = BitmapDescriptor.defaultMarker;
@@ -262,10 +263,9 @@ class MapScreenState extends State<MapScreen> {
       _beachBeingMoved = beach;
       _newBeachPosition = LatLng(beach.latitude, beach.longitude);
       _isMovingBeach = true;
-      _selectedBeach = null; // Clear selected beach
+      _selectedBeach = null;
     });
 
-    _toast('Tap on map or drag orange pin to new location');
   }
 
   Future<void> _submitMoveBeach() async {
@@ -274,6 +274,7 @@ class MapScreenState extends State<MapScreen> {
     // Set state BEFORE updating Firebase to prevent flickering
     final beachId = _beachBeingMoved!.id;
     final newPosition = _newBeachPosition!;
+    final waterBodyType = _selectedWaterBodyType;
 
     setState(() {
       _beachBeingMoved = null;
@@ -301,6 +302,7 @@ class MapScreenState extends State<MapScreen> {
         'geohash': newGeohash,
         'locationRefined': true,
         'locationRefinedAt': FieldValue.serverTimestamp(),
+        'waterBodyType': waterBodyType,
       });
 
       _toast('Beach location updated successfully!');
@@ -595,6 +597,74 @@ class MapScreenState extends State<MapScreen> {
                       ),
                     ],
                   ),
+                ),
+              ),
+            ),
+          ),
+
+        // Water body type selector - positioned at bottom when moving beach
+        if (_isMovingBeach && _beachBeingMoved != null)
+          Positioned(
+            bottom: 20,
+            left: 80,
+            right: 20,
+            child: Card(
+              elevation: 5,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Water Body Type',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Tidal', style: TextStyle(fontSize: 12)),
+                            value: 'tidal',
+                            groupValue: _selectedWaterBodyType,
+                            onChanged: (value) {
+                              setState(() => _selectedWaterBodyType = value!);
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Lake', style: TextStyle(fontSize: 12)),
+                            value: 'lake',
+                            groupValue: _selectedWaterBodyType,
+                            onChanged: (value) {
+                              setState(() => _selectedWaterBodyType = value!);
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('River', style: TextStyle(fontSize: 12)),
+                            value: 'river',
+                            groupValue: _selectedWaterBodyType,
+                            onChanged: (value) {
+                              setState(() => _selectedWaterBodyType = value!);
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),

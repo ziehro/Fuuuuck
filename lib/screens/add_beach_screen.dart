@@ -70,6 +70,7 @@ class _AddBeachScreenState extends State<AddBeachScreen>
   bool _isSaving = false;
   int _currentPageIndex = 0;
   String _appBarTitle = "Add New Beach";
+  String _selectedWaterBodyType = 'tidal';
   final GeminiService _geminiService = GeminiService();
 
   // Grouped form fields for each page
@@ -548,6 +549,7 @@ class _AddBeachScreenState extends State<AddBeachScreen>
     discoveryQuestions: [],
     educationalInfo: '',
     contributedDescriptions: [_shortDescriptionController.text],
+    waterBodyType: _selectedWaterBodyType,
     );
 
     await beachDataService.addBeach(
@@ -798,6 +800,71 @@ class _AddBeachScreenState extends State<AddBeachScreen>
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 16),
+
+          // Add Water Body Type Selector HERE (only for new beaches)
+          if (isNewBeach) ...[
+            Card(
+              elevation: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Water Body Type',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Tidal', style: TextStyle(fontSize: 12)),
+                            value: 'tidal',
+                            groupValue: _selectedWaterBodyType,
+                            onChanged: (value) {
+                              setState(() => _selectedWaterBodyType = value!);
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('Lake', style: TextStyle(fontSize: 12)),
+                            value: 'lake',
+                            groupValue: _selectedWaterBodyType,
+                            onChanged: (value) {
+                              setState(() => _selectedWaterBodyType = value!);
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                        Expanded(
+                          child: RadioListTile<String>(
+                            title: const Text('River', style: TextStyle(fontSize: 12)),
+                            value: 'river',
+                            groupValue: _selectedWaterBodyType,
+                            onChanged: (value) {
+                              setState(() => _selectedWaterBodyType = value!);
+                            },
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
           ListTile(
             title: const Text('Main Beach Photo'),
             trailing: _localImagePaths.isEmpty
