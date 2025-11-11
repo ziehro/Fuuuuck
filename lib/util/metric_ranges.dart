@@ -49,4 +49,7 @@ const Map<String, MetricRange> metricRanges = {
   'Length': MetricRange(0, 2000),
   'Water Index': MetricRange(0, 100),
   'Shoreline Risk': MetricRange(0, 0.5),
+  'Biodiversity Score': MetricRange(0, 10),
+  'Beach Diversity': MetricRange(0, 10),
+  'Location Confidence': MetricRange(0, 10),
 };

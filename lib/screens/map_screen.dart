@@ -38,6 +38,9 @@ class MapScreen extends StatefulWidget {
   static const Set<String> _premiumMetricKeys = {
     'Water Index',
     'Shoreline Risk',
+    'Biodiversity Score',      // NEW - count of unique identified species
+    'Beach Diversity',          // NEW - variety of beach compositions
+    'Location Confidence',
   };
 }
 
@@ -375,6 +378,9 @@ class MapScreenState extends State<MapScreen> {
     final vals = beaches.map((b) {
       if (key == 'Water Index') return b.waterIndex;
       if (key == 'Shoreline Risk') return b.shorelineRiskProxy;
+      if (key == 'Biodiversity Score') return b.biodiversityScore;
+      if (key == 'Beach Diversity') return b.beachDiversity;
+      if (key == 'Location Confidence') return b.locationConfidence;
       return b.aggregatedMetrics[key];
     }).whereType<double>().toList()..sort();
 
@@ -447,6 +453,48 @@ class MapScreenState extends State<MapScreen> {
       default:
         return MapType.normal;
     }
+  }
+
+  // In map_screen.dart - add new overlay widget
+
+  Widget _buildBiodiversityOverlay(Beach beach) {
+    if (_activeMetricKey != 'Biodiversity Score') return SizedBox.shrink();
+
+    return Positioned(
+      top: 60,
+      right: 10,
+      child: Card(
+        elevation: 4,
+        child: Container(
+          constraints: BoxConstraints(maxWidth: 200, maxHeight: 300),
+          padding: EdgeInsets.all(8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Species Found',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              SizedBox(height: 8),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: beach.identifiedFloraFauna.length,
+                  itemBuilder: (context, index) {
+                    final entry = beach.identifiedFloraFauna.entries.elementAt(index);
+                    return ListTile(
+                      dense: true,
+                      leading: Icon(Icons.eco, size: 16, color: Colors.green),
+                      title: Text(entry.key, style: TextStyle(fontSize: 12)),
+                      trailing: Text('${entry.value['count']}',
+                          style: TextStyle(fontSize: 10)),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override

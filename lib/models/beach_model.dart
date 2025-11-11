@@ -31,6 +31,17 @@ class Beach {
   final bool? locationRefined;
   final DateTime? locationRefinedAt;
   final String? waterBodyType;
+  double get biodiversityScore =>
+      (identifiedFloraFauna.length / 5.0).clamp(0.0, 10.0);
+
+  double get beachDiversity {
+    int score = identifiedBeachComposition.length +
+        identifiedRockTypesComposition.length;
+    return (score / 2.0).clamp(0.0, 10.0);
+  }
+
+  double get locationConfidence =>
+      (locationRefined ?? false) ? 10.0 : 3.0;
 
   Beach({
     required this.id,
