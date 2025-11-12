@@ -363,31 +363,63 @@ class MapScreenState extends State<MapScreen> {
   }
 
   // Calculate biodiversity score
+  // lib/screens/map_screen.dart - Replace the calculation methods
+
+// Calculate biodiversity score - more granular scale
   double _getBiodiversityScore(Beach beach) {
     final floraFaunaCount = beach.identifiedFloraFauna.length;
-    return (floraFaunaCount / 5.0).clamp(0.0, 10.0);
+    // Use logarithmic scale for better visualization
+    // 0 species = 0, 1 = 2, 5 = 5, 10 = 7, 20+ = 10
+    if (floraFaunaCount == 0) return 0.0;
+    return (2.0 + math.log(floraFaunaCount) * 2.5).clamp(0.0, 10.0);
   }
 
-  // Calculate beach diversity
+// Calculate beach diversity - consider multiple factors
   double _getBeachDiversity(Beach beach) {
-    int diversityScore = 0;
+    double score = 0.0;
 
-    final compositions = beach.identifiedBeachComposition;
-    if (compositions.isNotEmpty) {
-      diversityScore += compositions.length;
+    // Beach composition variety (max 5 points)
+    final beachComp = beach.identifiedBeachComposition;
+    if (beachComp.isNotEmpty) {
+      score += (beachComp.length * 1.0).clamp(0.0, 5.0);
     }
 
+    // Rock type variety (max 3 points)
     final rockTypes = beach.identifiedRockTypesComposition;
     if (rockTypes.isNotEmpty) {
-      diversityScore += rockTypes.length;
+      score += (rockTypes.length * 1.5).clamp(0.0, 3.0);
     }
 
-    return (diversityScore / 2.0).clamp(0.0, 10.0);
+    // Flora/fauna adds bonus (max 2 points)
+    final floraFauna = beach.identifiedFloraFauna.length;
+    if (floraFauna > 0) {
+      score += (floraFauna * 0.2).clamp(0.0, 2.0);
+    }
+
+    return score.clamp(0.0, 10.0);
   }
 
-  // Get location confidence
+// Get location confidence - show as percentage-based score
   double _getLocationConfidence(Beach beach) {
-    return (beach.locationRefined ?? false) ? 10.0 : 3.0;
+    if (beach.locationRefined ?? false) {
+      // Refined locations get high score (8-10)
+      // Can add time-based decay if locationRefinedAt is old
+      if (beach.locationRefinedAt != null) {
+        final daysSinceRefined = DateTime.now().difference(beach.locationRefinedAt!).inDays;
+        if (daysSinceRefined > 365) return 8.0; // Older refinement
+        if (daysSinceRefined > 180) return 9.0;
+        return 10.0; // Recent refinement
+      }
+      return 9.5; // Refined but no date
+    } else {
+      // Unrefined locations get lower scores
+      // Base it on contribution count (more contributions = higher confidence)
+      final contributions = beach.totalContributions;
+      if (contributions > 10) return 5.0;
+      if (contributions > 5) return 3.0;
+      if (contributions > 2) return 2.0;
+      return 1.0; // Very low confidence
+    }
   }
 
   void _rebuildHeatCircles(List<Beach> beaches) {
@@ -449,7 +481,7 @@ class MapScreenState extends State<MapScreen> {
       final normLinear = ((v - vMin) / (vMax - vMin)).clamp(0.0, 1.0);
       final norm = normLinear;
 
-      if (norm <= 0.02) continue;
+      if (norm <= 0.0) continue;
 
       final baseRadius = _lerp(minRadius, maxRadius, norm);
       final radius = _getRadiusForZoom(baseRadius);
