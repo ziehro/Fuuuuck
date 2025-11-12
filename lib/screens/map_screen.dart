@@ -38,8 +38,8 @@ class MapScreen extends StatefulWidget {
   static const Set<String> _premiumMetricKeys = {
     'Water Index',
     'Shoreline Risk',
-    'Biodiversity Score',      // NEW - count of unique identified species
-    'Beach Diversity',          // NEW - variety of beach compositions
+    'Biodiversity Score',
+    'Beach Diversity',
     'Location Confidence',
   };
 }
@@ -362,6 +362,34 @@ class MapScreenState extends State<MapScreen> {
     return (baseRadius * zoomFactor).clamp(100.0, 5000.0);
   }
 
+  // Calculate biodiversity score
+  double _getBiodiversityScore(Beach beach) {
+    final floraFaunaCount = beach.identifiedFloraFauna.length;
+    return (floraFaunaCount / 5.0).clamp(0.0, 10.0);
+  }
+
+  // Calculate beach diversity
+  double _getBeachDiversity(Beach beach) {
+    int diversityScore = 0;
+
+    final compositions = beach.identifiedBeachComposition;
+    if (compositions.isNotEmpty) {
+      diversityScore += compositions.length;
+    }
+
+    final rockTypes = beach.identifiedRockTypesComposition;
+    if (rockTypes.isNotEmpty) {
+      diversityScore += rockTypes.length;
+    }
+
+    return (diversityScore / 2.0).clamp(0.0, 10.0);
+  }
+
+  // Get location confidence
+  double _getLocationConfidence(Beach beach) {
+    return (beach.locationRefined ?? false) ? 10.0 : 3.0;
+  }
+
   void _rebuildHeatCircles(List<Beach> beaches) {
     _heatCircles.clear();
     _circleToBeachMap.clear();
@@ -374,13 +402,13 @@ class MapScreenState extends State<MapScreen> {
     final range = metricRanges[key];
     double vMin, vMax;
 
-    // Get values from either aggregatedMetrics or direct beach properties
+    // Get values from either aggregatedMetrics or direct beach properties or calculated metrics
     final vals = beaches.map((b) {
       if (key == 'Water Index') return b.waterIndex;
       if (key == 'Shoreline Risk') return b.shorelineRiskProxy;
-      if (key == 'Biodiversity Score') return b.biodiversityScore;
-      if (key == 'Beach Diversity') return b.beachDiversity;
-      if (key == 'Location Confidence') return b.locationConfidence;
+      if (key == 'Biodiversity Score') return _getBiodiversityScore(b);
+      if (key == 'Beach Diversity') return _getBeachDiversity(b);
+      if (key == 'Location Confidence') return _getLocationConfidence(b);
       return b.aggregatedMetrics[key];
     }).whereType<double>().toList()..sort();
 
@@ -406,6 +434,12 @@ class MapScreenState extends State<MapScreen> {
         v = b.waterIndex;
       } else if (key == 'Shoreline Risk') {
         v = b.shorelineRiskProxy;
+      } else if (key == 'Biodiversity Score') {
+        v = _getBiodiversityScore(b);
+      } else if (key == 'Beach Diversity') {
+        v = _getBeachDiversity(b);
+      } else if (key == 'Location Confidence') {
+        v = _getLocationConfidence(b);
       } else {
         v = b.aggregatedMetrics[key];
       }
@@ -455,45 +489,195 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  // In map_screen.dart - add new overlay widget
+  void _showLayerPicker() {
+    final settingsService = Provider.of<SettingsService>(context, listen: false);
 
-  Widget _buildBiodiversityOverlay(Beach beach) {
-    if (_activeMetricKey != 'Biodiversity Score') return SizedBox.shrink();
-
-    return Positioned(
-      top: 60,
-      right: 10,
-      child: Card(
-        elevation: 4,
-        child: Container(
-          constraints: BoxConstraints(maxWidth: 200, maxHeight: 300),
-          padding: EdgeInsets.all(8),
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Species Found',
-                  style: TextStyle(fontWeight: FontWeight.bold)),
-              SizedBox(height: 8),
-              Expanded(
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: beach.identifiedFloraFauna.length,
-                  itemBuilder: (context, index) {
-                    final entry = beach.identifiedFloraFauna.entries.elementAt(index);
-                    return ListTile(
-                      dense: true,
-                      leading: Icon(Icons.eco, size: 16, color: Colors.green),
-                      title: Text(entry.key, style: TextStyle(fontSize: 12)),
-                      trailing: Text('${entry.value['count']}',
-                          style: TextStyle(fontSize: 10)),
-                    );
-                  },
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Heatmap Layers',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    if (_activeMetricKey != null)
+                      TextButton(
+                        onPressed: () {
+                          clearHeatmap();
+                          Navigator.pop(context);
+                        },
+                        child: const Text('Clear'),
+                      ),
+                  ],
                 ),
               ),
+              const Divider(),
+
+              // Regular Metrics Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.terrain, size: 18, color: Colors.grey[600]),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Beach Metrics',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Flora
+              _buildMetricSection('Flora', [
+                'Kelp Beach',
+                'Seaweed Beach',
+                'Seaweed Rocks',
+              ]),
+
+              // Fauna
+              _buildMetricSection('Fauna', [
+                'Anemones',
+                'Barnacles',
+                'Bugs',
+                'Clams',
+                'Limpets',
+                'Mussels',
+                'Oysters',
+                'Snails',
+                'Turtles',
+              ]),
+
+              // Driftwood
+              _buildMetricSection('Driftwood', [
+                'Kindling',
+                'Firewood',
+                'Logs',
+                'Trees',
+              ]),
+
+              // Composition
+              _buildMetricSection('Composition', [
+                'Sand',
+                'Pebbles',
+                'Baseball Rocks',
+                'Rocks',
+                'Boulders',
+                'Stone',
+                'Coal',
+                'Mud',
+                'Midden',
+              ]),
+
+              const Divider(thickness: 2),
+
+              // Premium Metrics Section
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: Row(
+                  children: [
+                    Icon(Icons.diamond, size: 18, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Premium Layers',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.orange[700],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    if (!settingsService.hasPremiumAccess)
+                      const Icon(Icons.lock, size: 16, color: Colors.orange),
+                  ],
+                ),
+              ),
+
+              _buildPremiumMetricTile('Water Index', settingsService),
+              _buildPremiumMetricTile('Shoreline Risk', settingsService),
+              _buildPremiumMetricTile('Biodiversity Score', settingsService),
+              _buildPremiumMetricTile('Beach Diversity', settingsService),
+              _buildPremiumMetricTile('Location Confidence', settingsService),
+
+              const SizedBox(height: 16),
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMetricSection(String title, List<String> metrics) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 32, top: 8, bottom: 4),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey[700],
+            ),
+          ),
+        ),
+        ...metrics.map((metric) => _buildMetricTile(metric)),
+      ],
+    );
+  }
+
+  Widget _buildMetricTile(String metricKey) {
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
+      title: Text(metricKey, style: const TextStyle(fontSize: 14)),
+      trailing: _activeMetricKey == metricKey
+          ? const Icon(Icons.check_circle, color: seafoamGreen)
+          : null,
+      onTap: () {
+        setActiveMetric(metricKey);
+        Navigator.pop(context);
+      },
+    );
+  }
+
+  Widget _buildPremiumMetricTile(String metricKey, SettingsService settingsService) {
+    final hasAccess = settingsService.hasPremiumAccess;
+
+    return ListTile(
+      dense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 32, vertical: 0),
+      title: Row(
+        children: [
+          Text(metricKey, style: const TextStyle(fontSize: 14)),
+          const SizedBox(width: 8),
+          if (!hasAccess)
+            Icon(Icons.lock, size: 14, color: Colors.orange[300]),
+        ],
+      ),
+      trailing: _activeMetricKey == metricKey
+          ? const Icon(Icons.check_circle, color: seafoamGreen)
+          : null,
+      onTap: () {
+        setActiveMetric(metricKey);
+        if (hasAccess || !MapScreen._premiumMetricKeys.contains(metricKey)) {
+          Navigator.pop(context);
+        }
+      },
     );
   }
 
@@ -830,6 +1014,22 @@ class MapScreenState extends State<MapScreen> {
               ),
             ),
           ),
+
+        if (!_isMovingBeach)
+          Positioned(
+            top: 70,  // Below the map style button
+            left: 8,
+            child: FloatingActionButton.small(
+              heroTag: 'layerPickerButton',
+              backgroundColor: _activeMetricKey != null ? Colors.orange : Colors.white,
+              onPressed: () => _showLayerPicker(),
+              tooltip: 'Heatmap Layers',
+              child: Icon(
+                Icons.layers,
+                color: _activeMetricKey != null ? Colors.white : Theme.of(context).primaryColor,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -840,6 +1040,12 @@ class MapScreenState extends State<MapScreen> {
       displayValue = beach.waterIndex!.toStringAsFixed(1);
     } else if (_activeMetricKey == 'Shoreline Risk' && beach.shorelineRiskProxy != null) {
       displayValue = beach.shorelineRiskProxy!.toStringAsFixed(1);
+    } else if (_activeMetricKey == 'Biodiversity Score') {
+      displayValue = _getBiodiversityScore(beach).toStringAsFixed(1);
+    } else if (_activeMetricKey == 'Beach Diversity') {
+      displayValue = _getBeachDiversity(beach).toStringAsFixed(1);
+    } else if (_activeMetricKey == 'Location Confidence') {
+      displayValue = _getLocationConfidence(beach).toStringAsFixed(1);
     } else if (beach.aggregatedMetrics[_activeMetricKey!] != null) {
       displayValue = beach.aggregatedMetrics[_activeMetricKey!]!.toStringAsFixed(1);
     }
