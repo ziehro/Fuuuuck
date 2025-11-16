@@ -38,6 +38,7 @@ class MapScreen extends StatefulWidget {
   static const Set<String> _premiumMetricKeys = {
     'Water Index',
     'Shoreline Risk',
+    'Algae Risk',
     'Biodiversity Score',
     'Beach Diversity',
     'Location Confidence',
@@ -438,6 +439,7 @@ class MapScreenState extends State<MapScreen> {
     final vals = beaches.map((b) {
       if (key == 'Water Index') return b.waterIndex;
       if (key == 'Shoreline Risk') return b.shorelineRiskProxy;
+      if (key == 'Algae Risk') return b.algaeRiskScore;
       if (key == 'Biodiversity Score') return _getBiodiversityScore(b);
       if (key == 'Beach Diversity') return _getBeachDiversity(b);
       if (key == 'Location Confidence') return _getLocationConfidence(b);
@@ -466,6 +468,8 @@ class MapScreenState extends State<MapScreen> {
         v = b.waterIndex;
       } else if (key == 'Shoreline Risk') {
         v = b.shorelineRiskProxy;
+      } else if (key == 'Algae Risk') {
+        v = b.algaeRiskScore;
       } else if (key == 'Biodiversity Score') {
         v = _getBiodiversityScore(b);
       } else if (key == 'Beach Diversity') {
@@ -640,6 +644,7 @@ class MapScreenState extends State<MapScreen> {
 
               _buildPremiumMetricTile('Water Index', settingsService),
               _buildPremiumMetricTile('Shoreline Risk', settingsService),
+              _buildPremiumMetricTile('Algae Risk', settingsService),
               _buildPremiumMetricTile('Biodiversity Score', settingsService),
               _buildPremiumMetricTile('Beach Diversity', settingsService),
               _buildPremiumMetricTile('Location Confidence', settingsService),
@@ -1072,6 +1077,8 @@ class MapScreenState extends State<MapScreen> {
       displayValue = beach.waterIndex!.toStringAsFixed(1);
     } else if (_activeMetricKey == 'Shoreline Risk' && beach.shorelineRiskProxy != null) {
       displayValue = beach.shorelineRiskProxy!.toStringAsFixed(1);
+    } else if (_activeMetricKey == 'Algae Risk' && beach.algaeRisk != null) { // Add this
+      displayValue = beach.algaeRisk!;
     } else if (_activeMetricKey == 'Biodiversity Score') {
       displayValue = _getBiodiversityScore(beach).toStringAsFixed(1);
     } else if (_activeMetricKey == 'Beach Diversity') {

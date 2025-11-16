@@ -31,6 +31,7 @@ class Beach {
   final bool? locationRefined;
   final DateTime? locationRefinedAt;
   final String? waterBodyType;
+  final String? algaeRisk;
   double get biodiversityScore =>
       (identifiedFloraFauna.length / 5.0).clamp(0.0, 10.0);
 
@@ -73,6 +74,7 @@ class Beach {
     this.locationRefined,
     this.locationRefinedAt,
     this.waterBodyType,
+    this.algaeRisk,
   });
 
   Map<String, dynamic> toMap() {
@@ -103,7 +105,20 @@ class Beach {
       if (waterBodyType != null) 'waterBodyType': waterBodyType,
       if (waterIndex != null) 'waterIndex': waterIndex,
       if (shorelineRiskProxy != null) 'shorelineRiskProxy': shorelineRiskProxy,
+      if (algaeRisk != null) 'algaeRisk': algaeRisk,
     };
+  }
+  double get algaeRiskScore {
+    switch (algaeRisk) {
+      case 'low':
+        return 3.0;
+      case 'medium':
+        return 6.0;
+      case 'high':
+        return 9.0;
+      default:
+        return 0.0; // Unknown or null
+    }
   }
 
   factory Beach.fromFirestore(DocumentSnapshot doc) {
@@ -140,6 +155,7 @@ class Beach {
           ? (data['locationRefinedAt'] as Timestamp).toDate()
           : null,
       waterBodyType: data['waterBodyType'] as String?,
+      algaeRisk: (data['algaeData'] as Map<String, dynamic>?)?['algaeRisk'] as String?,
     );
   }
 }
