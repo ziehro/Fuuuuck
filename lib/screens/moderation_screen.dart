@@ -20,7 +20,7 @@ class _ModerationScreenState extends State<ModerationScreen> with SingleTickerPr
 
   // Admin user IDs (add your Firebase Auth UID here)
   static const List<String> _adminUserIds = [
-    'c4So8SbUIpYPsV0bF0aaAtyWj9q1', // Replace with your actual Firebase Auth UID
+    't8xTPHecHIRY8nWcvmQBzWouBIh1', // Replace with your actual Firebase Auth UID
   ];
 
   @override

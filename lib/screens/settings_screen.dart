@@ -730,7 +730,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _buildModerationSection() {
     // Only show for admin users
-    final adminUserIds = ['c4So8SbUIpYPsV0bF0aaAtyWj9q1']; // Replace with your Firebase Auth UID
+    final adminUserIds = ['t8xTPHecHIRY8nWcvmQBzWouBIh1']; // Replace with your Firebase Auth UID
     final currentUser = FirebaseAuth.instance.currentUser;
 
     if (currentUser == null || !adminUserIds.contains(currentUser.uid)) {
