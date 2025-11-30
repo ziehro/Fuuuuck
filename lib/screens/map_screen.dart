@@ -13,15 +13,20 @@ import 'package:dart_geohash/dart_geohash.dart';
 
 import 'package:mybeachbook/services/beach_data_service.dart';
 import 'package:mybeachbook/services/settings_service.dart';
+import 'package:mybeachbook/services/notification_service.dart';
+import 'package:mybeachbook/services/auth_service.dart';
 import 'package:mybeachbook/models/beach_model.dart';
 import 'package:mybeachbook/screens/add_beach_screen.dart';
 import 'package:mybeachbook/screens/beach_detail_screen.dart';
-import 'package:mybeachbook/screens/migration_screen.dart';
+import 'package:mybeachbook/screens/settings_screen.dart';
+import 'package:mybeachbook/screens/moderation_screen.dart';
 import 'package:mybeachbook/util/metric_ranges.dart';
 import 'package:mybeachbook/util/constants.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  final bool isAdmin;
+
+  const MapScreen({super.key, this.isAdmin = false});
 
   @override
   State<MapScreen> createState() => MapScreenState();
@@ -29,11 +34,33 @@ class MapScreen extends StatefulWidget {
   static Set<String> getMetricKeys() => _metricKeys;
 
   static const Set<String> _metricKeys = {
-    'Sand','Pebbles','Rocks','Boulders','Stone','Mud','Coal','Midden',
+    // Composition
+    'Sand','Pebbles','Rocks','Baseball Rocks','Boulders','Stone','Mud','Coal','Midden',
+    // Flora
     'Kelp Beach','Seaweed Beach','Seaweed Rocks',
+    // Driftwood
     'Kindling','Firewood','Logs','Trees',
+    // Fauna
     'Anemones','Barnacles','Bugs','Clams','Limpets','Mussels','Oysters','Snails','Turtles',
+    // Other Metrics
+    'Islands','Bluff Height','Bluffs Grade','Garbage','People','Width','Length',
+    'Boats on Shore','Caves','Patio Nearby?','Gold','Lookout','Private','Stink','Windy',
   };
+
+  // Satellite Metrics (premium features)
+  static const Set<String> _satelliteMetrics = {
+    'Shoreline Proximity',
+    'Water Quality Index',
+    'Tide Prediction',
+    'Weather Overlay',
+    'UV Index',
+    'Water Temperature',
+    'Wave Height',
+    'Wind Speed',
+  };
+
+  // Toggle this to true when you're ready to show satellite metrics
+  static const bool _showSatelliteMetrics = false;
 
   static const Set<String> _premiumMetricKeys = {
     'Water Index',
@@ -63,18 +90,12 @@ class MapScreenState extends State<MapScreen> {
   Beach? _beachBeingMoved;
   LatLng? _newBeachPosition;
   bool _isMovingBeach = false;
-  String _selectedWaterBodyType = 'tidal'; // Default value
+  String _selectedWaterBodyType = 'tidal';
 
-  // Cached marker icons to prevent flickering
+  // Cached marker icons
   static final BitmapDescriptor _defaultMarker = BitmapDescriptor.defaultMarker;
   static final BitmapDescriptor _greenMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
   static final BitmapDescriptor _orangeMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
-
-  // Admin check
-  bool get _isAdmin {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    return currentUser != null && AppConstants.adminUserIds.contains(currentUser.uid);
-  }
 
   void toggleMarkers() {
     setState(() {
@@ -234,10 +255,6 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
-  void _navigateToAddBeachScreen() {
-    Navigator.push(context, MaterialPageRoute(builder: (_) => const AddBeachScreen()));
-  }
-
   void _onCircleTap(String circleId) {
     final beach = _circleToBeachMap[circleId];
     if (beach != null) {
@@ -247,17 +264,14 @@ class MapScreenState extends State<MapScreen> {
 
   void _onMapTap(LatLng position) {
     if (_isMovingBeach) {
-      // If moving, update the position
       setState(() {
         _newBeachPosition = position;
       });
     } else {
-      // Otherwise, deselect beach
       setState(() => _selectedBeach = null);
     }
   }
 
-  // Beach moving functionality - initiated by button click
   void _startMovingBeach(Beach beach) {
     setState(() {
       _beachBeingMoved = beach;
@@ -265,13 +279,11 @@ class MapScreenState extends State<MapScreen> {
       _isMovingBeach = true;
       _selectedBeach = null;
     });
-
   }
 
   Future<void> _submitMoveBeach() async {
     if (_beachBeingMoved == null || _newBeachPosition == null) return;
 
-    // Set state BEFORE updating Firebase to prevent flickering
     final beachId = _beachBeingMoved!.id;
     final newPosition = _newBeachPosition!;
     final waterBodyType = _selectedWaterBodyType;
@@ -282,7 +294,6 @@ class MapScreenState extends State<MapScreen> {
       _isMovingBeach = false;
     });
 
-    // Now update Firebase
     _toast('Updating beach location...');
 
     try {
@@ -318,6 +329,14 @@ class MapScreenState extends State<MapScreen> {
       _isMovingBeach = false;
     });
     _toast('Move cancelled');
+  }
+
+  void _centerOnMyLocation() async {
+    if (_currentPosition != null && _mapController != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(_currentPosition!, 15),
+      );
+    }
   }
 
   @override
@@ -371,7 +390,6 @@ class MapScreenState extends State<MapScreen> {
     final range = metricRanges[key];
     double vMin, vMax;
 
-    // Get values from either aggregatedMetrics or direct beach properties
     final vals = beaches.map((b) {
       if (key == 'Water Index') return b.waterIndex;
       if (key == 'Shoreline Risk') return b.shorelineRiskProxy;
@@ -449,9 +467,310 @@ class MapScreenState extends State<MapScreen> {
     }
   }
 
+  void _showLayerMenu(BuildContext context) {
+    final keys = MapScreen.getMetricKeys().toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    final satelliteKeys = MapScreen._satelliteMetrics.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Heatmap Layer',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              title: const Text('None'),
+              trailing: _activeMetricKey == null
+                  ? const Icon(Icons.check, color: seafoamGreen)
+                  : null,
+              onTap: () {
+                setActiveMetric(null);
+                Navigator.pop(context);
+              },
+            ),
+            const Divider(),
+            Expanded(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  // User-contributed metrics
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: Text(
+                      'User Metrics',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        color: seafoamGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  ...keys.map((key) => ListTile(
+                    title: Text(key),
+                    trailing: _activeMetricKey == key
+                        ? const Icon(Icons.check, color: seafoamGreen)
+                        : null,
+                    onTap: () {
+                      setActiveMetric(key);
+                      Navigator.pop(context);
+                    },
+                  )),
+
+                  // Satellite metrics (only show if flag is true)
+                  if (MapScreen._showSatelliteMetrics) ...[
+                    const Divider(),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.satellite_alt, size: 16, color: seafoamGreen),
+                          const SizedBox(width: 8),
+                          Text(
+                            'Satellite Metrics',
+                            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                              color: seafoamGreen,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ...satelliteKeys.map((key) => ListTile(
+                      title: Text(key),
+                      trailing: _activeMetricKey == key
+                          ? const Icon(Icons.check, color: seafoamGreen)
+                          : null,
+                      onTap: () {
+                        setActiveMetric(key);
+                        Navigator.pop(context);
+                      },
+                    )),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showMenuDialog(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.settings, color: seafoamGreen),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsScreen()),
+                );
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.logout, color: Colors.red),
+              title: const Text('Sign Out', style: TextStyle(color: Colors.red)),
+              onTap: () {
+                Navigator.pop(context);
+                _showSignOutConfirmation();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showSignOutConfirmation() async {
+    final bool? shouldSignOut = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Sign Out'),
+          content: const Text('Are you sure you want to sign out?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Sign Out'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldSignOut == true) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+
+      // Stop notification service if admin
+      if (widget.isAdmin) {
+        final notificationService = Provider.of<NotificationService>(context, listen: false);
+        notificationService.stopListening(notifyChange: false);
+      }
+
+      await authService.signOut();
+    }
+  }
+
+  void _showQuickMapStylePicker(SettingsService settingsService) {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'Map Style',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.map),
+              title: const Text('Standard'),
+              trailing: settingsService.mapStyle == 'normal'
+                  ? const Icon(Icons.check, color: seafoamGreen)
+                  : null,
+              onTap: () {
+                settingsService.setMapStyle('normal');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.satellite_alt),
+              title: const Text('Satellite'),
+              trailing: settingsService.mapStyle == 'satellite'
+                  ? const Icon(Icons.check, color: seafoamGreen)
+                  : null,
+              onTap: () {
+                settingsService.setMapStyle('satellite');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.layers),
+              title: const Text('Hybrid'),
+              trailing: settingsService.mapStyle == 'hybrid'
+                  ? const Icon(Icons.check, color: seafoamGreen)
+                  : null,
+              onTap: () {
+                settingsService.setMapStyle('hybrid');
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.terrain),
+              title: const Text('Terrain'),
+              trailing: settingsService.mapStyle == 'terrain'
+                  ? const Icon(Icons.check, color: seafoamGreen)
+                  : null,
+              onTap: () {
+                settingsService.setMapStyle('terrain');
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  IconData _getMapStyleIcon(String style) {
+    switch (style) {
+      case 'satellite':
+        return Icons.satellite_alt;
+      case 'hybrid':
+        return Icons.layers;
+      case 'terrain':
+        return Icons.terrain;
+      case 'normal':
+      default:
+        return Icons.map;
+    }
+  }
+
+  Widget _buildNotificationBadge() {
+    return Consumer<NotificationService>(
+      builder: (context, notificationService, child) {
+        final count = notificationService.totalPendingCount;
+
+        return Stack(
+          children: [
+            FloatingActionButton.small(
+              heroTag: 'notificationButton',
+              backgroundColor: Colors.white,
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const ModerationScreen(),
+                  ),
+                );
+              },
+              tooltip: 'Moderation Queue',
+              child: const Icon(Icons.notifications, color: Colors.grey),
+            ),
+            if (count > 0)
+              Positioned(
+                right: 0,
+                top: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1.5),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 20,
+                    minHeight: 20,
+                  ),
+                  child: Text(
+                    count > 99 ? '99+' : count.toString(),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsService = Provider.of<SettingsService>(context);
+    final topPadding = MediaQuery.of(context).padding.top;
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
 
     return _currentPosition == null
         ? const Center(child: CircularProgressIndicator(semanticsLabel: 'Getting your location...'))
@@ -469,10 +788,8 @@ class MapScreenState extends State<MapScreen> {
 
             final beaches = snapshot.data ?? [];
 
-            // Build markers set
             final markers = <Marker>{};
 
-            // Add regular beach markers (only when not moving)
             if (_showMarkers && _activeMetricKey == null && !_isMovingBeach) {
               for (final b in beaches) {
                 markers.add(
@@ -489,7 +806,6 @@ class MapScreenState extends State<MapScreen> {
               }
             }
 
-            // Add the orange draggable marker for moving (separate from beach markers)
             if (_isMovingBeach && _newBeachPosition != null && _beachBeingMoved != null) {
               markers.add(
                 Marker(
@@ -507,7 +823,6 @@ class MapScreenState extends State<MapScreen> {
               );
             }
 
-            // Rebuild heat circles only when active metric is set
             if (_activeMetricKey != null) {
               _rebuildHeatCircles(beaches);
             }
@@ -532,13 +847,13 @@ class MapScreenState extends State<MapScreen> {
               markers: markers,
               circles: _heatCircles,
               myLocationEnabled: true,
-              myLocationButtonEnabled: true,
+              myLocationButtonEnabled: false,
               zoomControlsEnabled: false,
-              zoomGesturesEnabled: true,
-              scrollGesturesEnabled: true,
-              rotateGesturesEnabled: true,
-              tiltGesturesEnabled: true,
               mapType: _getMapType(settingsService.mapStyle),
+              padding: EdgeInsets.only(
+                top: topPadding,
+                bottom: bottomPadding,
+              ),
             );
           },
         ),
@@ -546,7 +861,7 @@ class MapScreenState extends State<MapScreen> {
         // Moving beach controls overlay
         if (_isMovingBeach && _beachBeingMoved != null)
           Positioned(
-            top: 10,
+            top: topPadding + 80,
             left: 0,
             right: 0,
             child: Center(
@@ -602,7 +917,7 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // Water body type selector - positioned at bottom when moving beach
+        // Water body type selector
         if (_isMovingBeach && _beachBeingMoved != null)
           Positioned(
             bottom: 20,
@@ -670,15 +985,119 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
+        // Floating action buttons at top-right
+        Positioned(
+          top: topPadding + 16,
+          right: 16,
+          child: Column(
+            children: [
+              FloatingActionButton.small(
+                heroTag: 'toggleMarkersButton',
+                backgroundColor: Colors.white,
+                onPressed: toggleMarkers,
+                tooltip: 'Toggle markers',
+                child: Icon(
+                  Icons.location_pin,
+                  color: _showMarkers ? seafoamGreen : Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              FloatingActionButton.small(
+                heroTag: 'heatmapLayerButton',
+                backgroundColor: Colors.white,
+                onPressed: () => _showLayerMenu(context),
+                tooltip: 'Heatmap layer',
+                child: Icon(
+                  Icons.layers,
+                  color: _activeMetricKey != null ? seafoamGreen : Colors.grey,
+                ),
+              ),
+              const SizedBox(height: 8),
+
+              FloatingActionButton.small(
+                heroTag: 'clearHeatmapButton',
+                backgroundColor: Colors.white,
+                onPressed: clearHeatmap,
+                tooltip: 'Clear heatmap',
+                child: const Icon(Icons.layers_clear, color: Colors.grey),
+              ),
+              const SizedBox(height: 8),
+
+              // Admin notification badge
+              if (widget.isAdmin) ...[
+                _buildNotificationBadge(),
+                const SizedBox(height: 8),
+              ],
+
+              FloatingActionButton.small(
+                heroTag: 'menuButton',
+                backgroundColor: Colors.white,
+                onPressed: () => _showMenuDialog(context),
+                tooltip: 'Menu',
+                child: const Icon(Icons.more_vert, color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+
+        // My location button (top-left)
+        Positioned(
+          top: topPadding + 16,
+          left: 16,
+          child: FloatingActionButton.small(
+            heroTag: 'myLocationButton',
+            backgroundColor: Colors.white,
+            onPressed: _centerOnMyLocation,
+            tooltip: 'Center on my location',
+            child: const Icon(Icons.my_location, color: Colors.grey),
+          ),
+        ),
+
+        // Map Style Switcher Button (under my location button)
+        Positioned(
+          top: topPadding + 72,
+          left: 16,
+          child: FloatingActionButton.small(
+            heroTag: 'mapStyleButton',
+            backgroundColor: Colors.white,
+            onPressed: () => _showQuickMapStylePicker(settingsService),
+            tooltip: 'Change Map Style',
+            child: Icon(
+              _getMapStyleIcon(settingsService.mapStyle),
+              color: seafoamGreen,
+            ),
+          ),
+        ),
+
+        // Add beach button (under map style button)
+        Positioned(
+          top: topPadding + 128,
+          left: 16,
+          child: FloatingActionButton.small(
+            heroTag: 'addBeachButton',
+            backgroundColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddBeachScreen())
+              );
+            },
+            tooltip: 'Add New Beach',
+            child: const Icon(Icons.add_location_alt, color: seafoamGreen),
+          ),
+        ),
+
+        // Legend
         if (_activeMetricKey != null)
           Positioned(
             left: 88,
             right: 88,
-            bottom: 22 + MediaQuery.of(context).padding.bottom,
+            bottom: bottomPadding + 100,
             child: _LegendBar(label: _activeMetricKey!),
           ),
 
-        // Selected beach info card with Move Pin button
+        // Selected beach info card
         if (_selectedBeach != null && !_isMovingBeach)
           Positioned(
             bottom: 100,
@@ -729,7 +1148,7 @@ class MapScreenState extends State<MapScreen> {
                             ),
                           ),
                         ),
-                        if (_isAdmin) ...[
+                        if (widget.isAdmin) ...[
                           const SizedBox(width: 8),
                           ElevatedButton.icon(
                             onPressed: () => _startMovingBeach(_selectedBeach!),
@@ -749,11 +1168,12 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
+        // "Search this area" button
         if (_showSearchAreaButton && !_isMovingBeach)
           Positioned(
-            top: 10,
-            left: 0,
-            right: 0,
+            top: topPadding + 16,
+            left: 80,
+            right: 80,
             child: Center(
               child: ElevatedButton.icon(
                 icon: const Icon(Icons.search),
@@ -763,22 +1183,6 @@ class MapScreenState extends State<MapScreen> {
                   backgroundColor: Theme.of(context).primaryColor,
                   foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
                 ),
-              ),
-            ),
-          ),
-
-        if (!_isMovingBeach)
-          Positioned(
-            top: 8,
-            left: 8,
-            child: FloatingActionButton.small(
-              heroTag: 'mapStyleButton',
-              backgroundColor: Colors.white,
-              onPressed: () => _showQuickMapStylePicker(settingsService),
-              tooltip: 'Change Map Style',
-              child: Icon(
-                _getMapStyleIcon(settingsService.mapStyle),
-                color: Theme.of(context).primaryColor,
               ),
             ),
           ),
@@ -810,86 +1214,6 @@ class MapScreenState extends State<MapScreen> {
           color: Colors.white,
           fontWeight: FontWeight.bold,
           fontSize: 12,
-        ),
-      ),
-    );
-  }
-
-  IconData _getMapStyleIcon(String style) {
-    switch (style) {
-      case 'satellite':
-        return Icons.satellite_alt;
-      case 'hybrid':
-        return Icons.layers;
-      case 'terrain':
-        return Icons.terrain;
-      case 'normal':
-      default:
-        return Icons.map;
-    }
-  }
-
-  void _showQuickMapStylePicker(SettingsService settingsService) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Text(
-                'Map Style',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.map),
-              title: const Text('Standard'),
-              trailing: settingsService.mapStyle == 'normal'
-                  ? const Icon(Icons.check, color: seafoamGreen)
-                  : null,
-              onTap: () {
-                settingsService.setMapStyle('normal');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.satellite_alt),
-              title: const Text('Satellite'),
-              trailing: settingsService.mapStyle == 'satellite'
-                  ? const Icon(Icons.check, color: seafoamGreen)
-                  : null,
-              onTap: () {
-                settingsService.setMapStyle('satellite');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.layers),
-              title: const Text('Hybrid'),
-              trailing: settingsService.mapStyle == 'hybrid'
-                  ? const Icon(Icons.check, color: seafoamGreen)
-                  : null,
-              onTap: () {
-                settingsService.setMapStyle('hybrid');
-                Navigator.pop(context);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.terrain),
-              title: const Text('Terrain'),
-              trailing: settingsService.mapStyle == 'terrain'
-                  ? const Icon(Icons.check, color: seafoamGreen)
-                  : null,
-              onTap: () {
-                settingsService.setMapStyle('terrain');
-                Navigator.pop(context);
-              },
-            ),
-          ],
         ),
       ),
     );
