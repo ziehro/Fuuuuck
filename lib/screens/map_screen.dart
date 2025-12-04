@@ -221,7 +221,25 @@ class MapScreenState extends State<MapScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+
+    // Find the nearest Scaffold context (if any) or show a simple dialog
+    try {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      // If no Scaffold available, show a dialog instead
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          content: Text(msg),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   Future<LatLngBounds> _safeVisibleRegion(GoogleMapController c) async {
@@ -263,7 +281,8 @@ class MapScreenState extends State<MapScreen> {
   }
 
   void _onMapTap(LatLng position) {
-    if (_isMovingBeach) {
+    if (_isMovingBeach && _beachBeingMoved != null) {
+      // Update the new position when tapping on map during move mode
       setState(() {
         _newBeachPosition = position;
       });
@@ -278,23 +297,61 @@ class MapScreenState extends State<MapScreen> {
       _newBeachPosition = LatLng(beach.latitude, beach.longitude);
       _isMovingBeach = true;
       _selectedBeach = null;
+      _selectedWaterBodyType = beach.waterBodyType ?? 'tidal'; // Use existing type or default to tidal
     });
+
+    // Animate camera to center on the beach being moved
+    if (_mapController != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newLatLngZoom(LatLng(beach.latitude, beach.longitude), 16),
+      );
+    }
   }
 
   Future<void> _submitMoveBeach() async {
-    if (_beachBeingMoved == null || _newBeachPosition == null) return;
+    if (_beachBeingMoved == null || _newBeachPosition == null) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Error'),
+          content: const Text('No beach or position selected'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
 
+    // Store values before clearing state
     final beachId = _beachBeingMoved!.id;
+    final beachName = _beachBeingMoved!.name;
     final newPosition = _newBeachPosition!;
     final waterBodyType = _selectedWaterBodyType;
 
-    setState(() {
-      _beachBeingMoved = null;
-      _newBeachPosition = null;
-      _isMovingBeach = false;
-    });
-
-    _toast('Updating beach location...');
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Updating beach location...'),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
 
     try {
       final geoHasher = GeoHasher();
@@ -316,9 +373,55 @@ class MapScreenState extends State<MapScreen> {
         'waterBodyType': waterBodyType,
       });
 
-      _toast('Beach location updated successfully!');
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Clear state AFTER successful update
+      setState(() {
+        _beachBeingMoved = null;
+        _newBeachPosition = null;
+        _isMovingBeach = false;
+      });
+
+      // Reload beaches to show updated position
+      await _loadBeachesForVisibleRegion();
+
+      // Show success message
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Success'),
+            content: Text('$beachName location updated successfully!'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     } catch (e) {
-      _toast('Failed to update location: $e');
+      // Close loading dialog
+      if (mounted) Navigator.of(context).pop();
+
+      // Show error message
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to update location: $e'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+        );
+      }
     }
   }
 
@@ -328,7 +431,20 @@ class MapScreenState extends State<MapScreen> {
       _newBeachPosition = null;
       _isMovingBeach = false;
     });
-    _toast('Move cancelled');
+
+    // Show cancellation message using dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        content: const Text('Move cancelled'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _centerOnMyLocation() async {
@@ -806,6 +922,7 @@ class MapScreenState extends State<MapScreen> {
               }
             }
 
+            // Add the orange draggable marker when moving a beach
             if (_isMovingBeach && _newBeachPosition != null && _beachBeingMoved != null) {
               markers.add(
                 Marker(
@@ -819,6 +936,7 @@ class MapScreenState extends State<MapScreen> {
                   },
                   icon: _orangeMarker,
                   zIndex: 1000,
+                  infoWindow: const InfoWindow(title: 'New Location'),
                 ),
               );
             }
