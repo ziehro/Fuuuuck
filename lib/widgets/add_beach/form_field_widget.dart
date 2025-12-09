@@ -1,15 +1,15 @@
 // lib/widgets/add_beach/form_field_widget.dart
 import 'package:flutter/material.dart';
 import 'package:mybeachbook/models/form_data_model.dart';
-import 'package:mybeachbook/services/gemini_service.dart';
 import 'package:mybeachbook/util/long_press_descriptions.dart';
-
+import '../../util/beach_icons.dart';
 import '../../util/shell_icons.dart';
+import 'package:mybeachbook/util/long_press_descriptions.dart';
 
 class FormFieldWidget extends StatefulWidget {
   final FormFieldData field;
   final Map<String, dynamic> formData;
-  final TextEditingController? controller; // Optional controller for text/number fields
+  final TextEditingController? controller;
 
   const FormFieldWidget({
     super.key,
@@ -23,7 +23,6 @@ class FormFieldWidget extends StatefulWidget {
 }
 
 class _FormFieldWidgetState extends State<FormFieldWidget> {
-  final GeminiService _geminiService = GeminiService();
   late TextEditingController _localController;
   bool _usingProvidedController = false;
 
@@ -35,22 +34,18 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
 
   void _setupController() {
     if (widget.controller != null) {
-      // Use the provided controller
       _localController = widget.controller!;
       _usingProvidedController = true;
 
-      // Initialize the controller with existing form data if it's empty
       if (_localController.text.isEmpty && widget.formData.containsKey(widget.field.label)) {
         _localController.text = widget.formData[widget.field.label].toString();
       }
     } else {
-      // Create our own controller
       _localController = TextEditingController(
         text: widget.formData[widget.field.label]?.toString() ?? '',
       );
       _usingProvidedController = false;
 
-      // Add listener to sync with form data
       _localController.addListener(() {
         final value = _localController.text;
         if (widget.field.type == InputFieldType.number) {
@@ -71,27 +66,37 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
     }
   }
 
-  void _showInfoDialog(String subject) {
-    final String description = longPressDescriptions[subject] ?? 'No description available.';
+  void _showInfoDialog(String option) {
+    final ImageProvider? iconProvider = BeachIcons.getIcon(option);
 
     showDialog(
       context: context,
-      builder: (context) {
+      barrierDismissible: true,
+      builder: (BuildContext context) {
         return AlertDialog(
-          title: Text(subject),
+          title: Text(option),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Use a simple icon instead of AI-generated image
-                Icon(
-                  _getIconForSubject(subject),
-                  size: 100,
-                  color: Theme.of(context).primaryColor,
+                if (iconProvider != null) ...[
+                  Container(
+                    width: 200,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: iconProvider,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                Text(
+                  LongPressDescriptions.getDescription(option),
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 16),
-                Text(description),
               ],
             ),
           ),
@@ -104,27 +109,6 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
         );
       },
     );
-  }
-
-// Helper to get appropriate icon
-  IconData _getIconForSubject(String subject) {
-    // Flora
-    if (['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types'].contains(subject)) {
-      return Icons.eco;
-    }
-    // Fauna
-    if (['Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels', 'Birds'].contains(subject)) {
-      return Icons.pets;
-    }
-    // Wood
-    if (['Kindling', 'Firewood', 'Logs', 'Trees'].contains(subject)) {
-      return Icons.park;
-    }
-    // Composition
-    if (['Sand', 'Pebbles', 'Rocks', 'Boulders', 'Stone'].contains(subject)) {
-      return Icons.terrain;
-    }
-    return Icons.info;
   }
 
   @override
@@ -248,7 +232,6 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
         Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
 
-        // Use Column instead of Wrap for vertical layout
         if (isShellField)
           ...options.map((option) {
             final bool isSelected = selectedOptions.contains(option);
@@ -276,7 +259,6 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
                     padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
                     child: Row(
                       children: [
-                        // Large shell image
                         if (imageProvider != null)
                           Container(
                             width: 80,
@@ -299,10 +281,7 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
                             ),
                             child: const Icon(Icons.image, size: 40),
                           ),
-
                         const SizedBox(width: 16),
-
-                        // Shell name
                         Expanded(
                           child: Text(
                             option,
@@ -311,8 +290,6 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
                             ),
                           ),
                         ),
-
-                        // Checkmark
                         if (isSelected)
                           Icon(
                             Icons.check_circle,
@@ -333,7 +310,6 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
             );
           }).toList()
         else
-        // Keep original Wrap layout for other multi-choice fields
           Wrap(
             spacing: 8.0,
             runSpacing: 4.0,
@@ -364,7 +340,6 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
 
   @override
   void dispose() {
-    // Only dispose the controller if we created it ourselves
     if (!_usingProvidedController) {
       _localController.dispose();
     }

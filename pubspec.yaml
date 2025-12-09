@@ -59,6 +59,7 @@ flutter:
     - assets/models/
     - assets/
     - assets/shells_grid.png
+    - assets/icons/
 
 flutter_native_splash:
   color: "#F4E4C1"

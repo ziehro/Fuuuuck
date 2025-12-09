@@ -63,3 +63,9 @@ const Map<String, String> longPressDescriptions = {
   'Man Made': 'The presence of man-made structures on or near the beach, such as seawalls or benches.',
   'Shade': 'Information on the availability of shade at different times of the day.',
 };
+
+class LongPressDescriptions {
+  static String getDescription(String key) {
+    return longPressDescriptions[key] ?? 'No description available.';
+  }
+}
