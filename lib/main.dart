@@ -6,6 +6,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
+import 'package:mybeachbook/util/shell_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:mybeachbook/services/sync_service.dart';
@@ -34,25 +35,21 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  /*await FirebaseAppCheck.instance.activate(
-    androidProvider: Platform.isAndroid
-        ? AndroidProvider.debug
-        : AndroidProvider.debug,
-    appleProvider: AppleProvider.debug,
-  );*/
-
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
 
   SyncService();
 
+  // Initialize shell images
+  await ShellIcons.initialize(); // Add this line
+
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (context) => AuthService()),
         ChangeNotifierProvider(create: (context) => SettingsService()),
-        ChangeNotifierProvider(create: (context) => NotificationService()), // ADD THIS
+        ChangeNotifierProvider(create: (context) => NotificationService()),
         Provider<BeachDataService>(create: (context) => BeachDataService()),
       ],
       child: const RootApp(),

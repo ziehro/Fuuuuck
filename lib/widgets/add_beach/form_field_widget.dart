@@ -4,6 +4,8 @@ import 'package:mybeachbook/models/form_data_model.dart';
 import 'package:mybeachbook/services/gemini_service.dart';
 import 'package:mybeachbook/util/long_press_descriptions.dart';
 
+import '../../util/shell_icons.dart';
+
 class FormFieldWidget extends StatefulWidget {
   final FormFieldData field;
   final Map<String, dynamic> formData;
@@ -70,65 +72,59 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
   }
 
   void _showInfoDialog(String subject) {
-    // Get the description from our new map, or use a default if not found.
     final String description = longPressDescriptions[subject] ?? 'No description available.';
 
     showDialog(
       context: context,
       builder: (context) {
-        return FutureBuilder<GeminiInfo>(
-          // We still fetch the image from Gemini
-          future: _geminiService.getInfoAndImage(subject, description: description),
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const AlertDialog(
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text('Loading info...'),
-                  ],
+        return AlertDialog(
+          title: Text(subject),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Use a simple icon instead of AI-generated image
+                Icon(
+                  _getIconForSubject(subject),
+                  size: 100,
+                  color: Theme.of(context).primaryColor,
                 ),
-              );
-            }
-
-            if (snapshot.hasError || !snapshot.hasData) {
-              return AlertDialog(
-                title: const Text('Error'),
-                content: const Text('Could not load information.'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
-                ],
-              );
-            }
-
-            final info = snapshot.data!;
-            return AlertDialog(
-              title: Text(subject),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      height: 150,
-                      width: double.infinity,
-                      child: info.image,
-                    ),
-                    const SizedBox(height: 16),
-                    // Use the description from our map
-                    Text(info.description),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+                const SizedBox(height: 16),
+                Text(description),
               ],
-            );
-          },
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
         );
       },
     );
+  }
+
+// Helper to get appropriate icon
+  IconData _getIconForSubject(String subject) {
+    // Flora
+    if (['Seaweed Beach', 'Seaweed Rocks', 'Kelp Beach', 'Tree types'].contains(subject)) {
+      return Icons.eco;
+    }
+    // Fauna
+    if (['Anemones', 'Barnacles', 'Bugs', 'Snails', 'Oysters', 'Clams', 'Limpets', 'Turtles', 'Mussels', 'Birds'].contains(subject)) {
+      return Icons.pets;
+    }
+    // Wood
+    if (['Kindling', 'Firewood', 'Logs', 'Trees'].contains(subject)) {
+      return Icons.park;
+    }
+    // Composition
+    if (['Sand', 'Pebbles', 'Rocks', 'Boulders', 'Stone'].contains(subject)) {
+      return Icons.terrain;
+    }
+    return Icons.info;
   }
 
   @override
@@ -244,35 +240,124 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
     }
     List<String> selectedOptions = List<String>.from(widget.formData[label] ?? []);
 
+    final bool isShellField = label == 'Which Shells';
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyLarge),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8.0,
-          runSpacing: 4.0,
-          children: options.map((option) {
+        Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+
+        // Use Column instead of Wrap for vertical layout
+        if (isShellField)
+          ...options.map((option) {
             final bool isSelected = selectedOptions.contains(option);
+            final ImageProvider? imageProvider = ShellIcons.getImageProvider(option);
+
             return GestureDetector(
               onLongPress: () => _showInfoDialog(option),
-              child: FilterChip(
-                label: Text(option),
-                selected: isSelected,
-                onSelected: (bool selected) {
-                  setState(() {
-                    if (selected) {
-                      selectedOptions.add(option);
-                    } else {
-                      selectedOptions.remove(option);
-                    }
-                    widget.formData[label] = selectedOptions;
-                  });
-                },
+              child: Card(
+                elevation: isSelected ? 4 : 1,
+                color: isSelected
+                    ? Theme.of(context).primaryColor.withOpacity(0.1)
+                    : null,
+                child: InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isSelected) {
+                        selectedOptions.remove(option);
+                      } else {
+                        selectedOptions.add(option);
+                      }
+                      widget.formData[label] = selectedOptions;
+                    });
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0),
+                    child: Row(
+                      children: [
+                        // Large shell image
+                        if (imageProvider != null)
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              image: DecorationImage(
+                                image: imageProvider,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          )
+                        else
+                          Container(
+                            width: 80,
+                            height: 80,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: Colors.grey[300],
+                            ),
+                            child: const Icon(Icons.image, size: 40),
+                          ),
+
+                        const SizedBox(width: 16),
+
+                        // Shell name
+                        Expanded(
+                          child: Text(
+                            option,
+                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                            ),
+                          ),
+                        ),
+
+                        // Checkmark
+                        if (isSelected)
+                          Icon(
+                            Icons.check_circle,
+                            color: Theme.of(context).primaryColor,
+                            size: 32,
+                          )
+                        else
+                          Icon(
+                            Icons.circle_outlined,
+                            color: Colors.grey[400],
+                            size: 32,
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
               ),
             );
-          }).toList(),
-        ),
+          }).toList()
+        else
+        // Keep original Wrap layout for other multi-choice fields
+          Wrap(
+            spacing: 8.0,
+            runSpacing: 4.0,
+            children: options.map((option) {
+              final bool isSelected = selectedOptions.contains(option);
+              return GestureDetector(
+                onLongPress: () => _showInfoDialog(option),
+                child: FilterChip(
+                  label: Text(option),
+                  selected: isSelected,
+                  onSelected: (bool selected) {
+                    setState(() {
+                      if (selected) {
+                        selectedOptions.add(option);
+                      } else {
+                        selectedOptions.remove(option);
+                      }
+                      widget.formData[label] = selectedOptions;
+                    });
+                  },
+                ),
+              );
+            }).toList(),
+          ),
       ],
     );
   }
