@@ -4,7 +4,6 @@ import 'package:mybeachbook/models/form_data_model.dart';
 import 'package:mybeachbook/util/long_press_descriptions.dart';
 import '../../util/beach_icons.dart';
 import '../../util/shell_icons.dart';
-import 'package:mybeachbook/util/long_press_descriptions.dart';
 
 class FormFieldWidget extends StatefulWidget {
   final FormFieldData field;
@@ -123,99 +122,194 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
   }
 
   Widget _buildFormField() {
+    final ImageProvider? iconProvider = BeachIcons.getIcon(widget.field.label);
+
     switch (widget.field.type) {
       case InputFieldType.text:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: TextFormField(
-            controller: _localController,
-            decoration: InputDecoration(labelText: widget.field.label, hintText: 'Enter Here, separated by commas'),
-            onSaved: (value) {
-              if (value != null && value.isNotEmpty) {
-                widget.formData[widget.field.label] = value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
-              } else {
-                widget.formData[widget.field.label] = [];
-              }
-            },
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (iconProvider != null) ...[
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: iconProvider,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: TextFormField(
+                  controller: _localController,
+                  decoration: InputDecoration(
+                    labelText: widget.field.label,
+                    hintText: 'Enter Here, separated by commas',
+                  ),
+                  onSaved: (value) {
+                    if (value != null && value.isNotEmpty) {
+                      widget.formData[widget.field.label] = value.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                    } else {
+                      widget.formData[widget.field.label] = [];
+                    }
+                  },
+                ),
+              ),
+            ],
           ),
         );
+
       case InputFieldType.number:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: TextFormField(
-            controller: _localController,
-            decoration: InputDecoration(labelText: widget.field.label, hintText: 'Enter Here'),
-            keyboardType: TextInputType.number,
-            validator: (value) {
-              if (value == null || value.isEmpty) return 'Please enter a number';
-              if (double.tryParse(value) == null) return 'Please enter a valid number';
-              return null;
-            },
-            onSaved: (value) => widget.formData[widget.field.label] = double.tryParse(value ?? '0.0'),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (iconProvider != null) ...[
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: iconProvider,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: TextFormField(
+                  controller: _localController,
+                  decoration: InputDecoration(
+                    labelText: widget.field.label,
+                    hintText: 'Enter Here',
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) return 'Please enter a number';
+                    if (double.tryParse(value) == null) return 'Please enter a valid number';
+                    return null;
+                  },
+                  onSaved: (value) => widget.formData[widget.field.label] = double.tryParse(value ?? '0.0'),
+                ),
+              ),
+            ],
           ),
         );
+
       case InputFieldType.slider:
         if (!widget.formData.containsKey(widget.field.label)) {
           widget.formData[widget.field.label] = widget.field.minValue ?? 0;
         }
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text('${widget.field.label}: ${(widget.formData[widget.field.label] ?? widget.field.minValue ?? 0).round()}', style: Theme.of(context).textTheme.bodyLarge),
-              Slider(
-                value: (widget.formData[widget.field.label] ?? widget.field.minValue ?? 0).toDouble(),
-                min: (widget.field.minValue ?? 0).toDouble(),
-                max: (widget.field.maxValue ?? 5).toDouble(),
-                divisions: (widget.field.maxValue ?? 5) - (widget.field.minValue ?? 0),
-                label: (widget.formData[widget.field.label] ?? widget.field.minValue ?? 0).round().toString(),
-                onChanged: (double value) {
-                  setState(() {
-                    widget.formData[widget.field.label] = value.round();
-                  });
-                },
-                onChangeEnd: (double value) {
-                  widget.formData[widget.field.label] = value.round();
-                },
+              if (iconProvider != null) ...[
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: iconProvider,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${widget.field.label}: ${(widget.formData[widget.field.label] ?? widget.field.minValue ?? 0).round()}',
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                    Slider(
+                      value: (widget.formData[widget.field.label] ?? widget.field.minValue ?? 0).toDouble(),
+                      min: (widget.field.minValue ?? 0).toDouble(),
+                      max: (widget.field.maxValue ?? 5).toDouble(),
+                      divisions: (widget.field.maxValue ?? 5) - (widget.field.minValue ?? 0),
+                      label: (widget.formData[widget.field.label] ?? widget.field.minValue ?? 0).round().toString(),
+                      onChanged: (double value) {
+                        setState(() {
+                          widget.formData[widget.field.label] = value.round();
+                        });
+                      },
+                      onChangeEnd: (double value) {
+                        widget.formData[widget.field.label] = value.round();
+                      },
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
         );
+
       case InputFieldType.singleChoice:
+        if (!widget.formData.containsKey(widget.field.label)) {
+          widget.formData[widget.field.label] = null;
+        }
+
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          child: _buildSingleChoiceDropdown(widget.field.label, widget.field.options!),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (iconProvider != null) ...[
+                Container(
+                  width: 80,
+                  height: 80,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: iconProvider,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  decoration: InputDecoration(labelText: widget.field.label),
+                  value: widget.formData[widget.field.label] as String?,
+                  items: widget.field.options!.map((String option) {
+                    return DropdownMenuItem<String>(
+                      value: option,
+                      child: Text(option),
+                    );
+                  }).toList(),
+                  onChanged: (String? newValue) {
+                    setState(() {
+                      widget.formData[widget.field.label] = newValue;
+                    });
+                  },
+                  onSaved: (newValue) => widget.formData[widget.field.label] = newValue,
+                ),
+              ),
+            ],
+          ),
         );
+
       case InputFieldType.multiChoice:
         return Padding(
           padding: const EdgeInsets.symmetric(vertical: 8.0),
           child: _buildMultiChoiceChips(widget.field.label, widget.field.options!),
         );
     }
-  }
-
-  Widget _buildSingleChoiceDropdown(String label, List<String> options) {
-    if (!widget.formData.containsKey(label)) {
-      widget.formData[label] = null;
-    }
-
-    return DropdownButtonFormField<String>(
-      decoration: InputDecoration(labelText: label),
-      value: widget.formData[label] as String?,
-      items: options.map((String option) {
-        return DropdownMenuItem<String>(
-          value: option,
-          child: Text(option),
-        );
-      }).toList(),
-      onChanged: (String? newValue) {
-        setState(() {
-          widget.formData[label] = newValue;
-        });
-      },
-      onSaved: (newValue) => widget.formData[label] = newValue,
-    );
   }
 
   Widget _buildMultiChoiceChips(String label, List<String> options) {
@@ -225,11 +319,35 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
     List<String> selectedOptions = List<String>.from(widget.formData[label] ?? []);
 
     final bool isShellField = label == 'Which Shells';
+    final ImageProvider? fieldIcon = BeachIcons.getIcon(label);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+        Row(
+          children: [
+            if (fieldIcon != null) ...[
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  image: DecorationImage(
+                    image: fieldIcon,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+            ],
+            Expanded(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 12),
 
         if (isShellField)
@@ -315,9 +433,24 @@ class _FormFieldWidgetState extends State<FormFieldWidget> {
             runSpacing: 4.0,
             children: options.map((option) {
               final bool isSelected = selectedOptions.contains(option);
+              final ImageProvider? optionIcon = BeachIcons.getIcon(option);
+
               return GestureDetector(
                 onLongPress: () => _showInfoDialog(option),
                 child: FilterChip(
+                  avatar: optionIcon != null
+                      ? Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: optionIcon,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  )
+                      : null,
                   label: Text(option),
                   selected: isSelected,
                   onSelected: (bool selected) {

@@ -22,6 +22,7 @@ import 'package:mybeachbook/screens/settings_screen.dart';
 import 'package:mybeachbook/screens/moderation_screen.dart';
 import 'package:mybeachbook/util/metric_ranges.dart';
 import 'package:mybeachbook/util/constants.dart';
+import 'package:mybeachbook/widgets/map_menu.dart';
 
 class MapScreen extends StatefulWidget {
   final bool isAdmin;
@@ -47,7 +48,6 @@ class MapScreen extends StatefulWidget {
     'Boats on Shore','Caves','Patio Nearby?','Gold','Lookout','Private','Stink','Windy',
   };
 
-  // Satellite Metrics (premium features)
   static const Set<String> _satelliteMetrics = {
     'Shoreline Proximity',
     'Water Quality Index',
@@ -59,7 +59,6 @@ class MapScreen extends StatefulWidget {
     'Wind Speed',
   };
 
-  // Toggle this to true when you're ready to show satellite metrics
   static const bool _showSatelliteMetrics = false;
 
   static const Set<String> _premiumMetricKeys = {
@@ -86,13 +85,11 @@ class MapScreenState extends State<MapScreen> {
 
   double _currentZoom = 10.0;
 
-  // Beach moving state
   Beach? _beachBeingMoved;
   LatLng? _newBeachPosition;
   bool _isMovingBeach = false;
   String _selectedWaterBodyType = 'tidal';
 
-  // Cached marker icons
   static final BitmapDescriptor _defaultMarker = BitmapDescriptor.defaultMarker;
   static final BitmapDescriptor _greenMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
   static final BitmapDescriptor _orangeMarker = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange);
@@ -222,11 +219,9 @@ class MapScreenState extends State<MapScreen> {
   void _toast(String msg) {
     if (!mounted) return;
 
-    // Find the nearest Scaffold context (if any) or show a simple dialog
     try {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
-      // If no Scaffold available, show a dialog instead
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -282,7 +277,6 @@ class MapScreenState extends State<MapScreen> {
 
   void _onMapTap(LatLng position) {
     if (_isMovingBeach && _beachBeingMoved != null) {
-      // Update the new position when tapping on map during move mode
       setState(() {
         _newBeachPosition = position;
       });
@@ -297,10 +291,9 @@ class MapScreenState extends State<MapScreen> {
       _newBeachPosition = LatLng(beach.latitude, beach.longitude);
       _isMovingBeach = true;
       _selectedBeach = null;
-      _selectedWaterBodyType = beach.waterBodyType ?? 'tidal'; // Use existing type or default to tidal
+      _selectedWaterBodyType = beach.waterBodyType ?? 'tidal';
     });
 
-    // Animate camera to center on the beach being moved
     if (_mapController != null) {
       _mapController!.animateCamera(
         CameraUpdate.newLatLngZoom(LatLng(beach.latitude, beach.longitude), 16),
@@ -326,13 +319,11 @@ class MapScreenState extends State<MapScreen> {
       return;
     }
 
-    // Store values before clearing state
     final beachId = _beachBeingMoved!.id;
     final beachName = _beachBeingMoved!.name;
     final newPosition = _newBeachPosition!;
     final waterBodyType = _selectedWaterBodyType;
 
-    // Show loading indicator
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -373,20 +364,16 @@ class MapScreenState extends State<MapScreen> {
         'waterBodyType': waterBodyType,
       });
 
-      // Close loading dialog
       if (mounted) Navigator.of(context).pop();
 
-      // Clear state AFTER successful update
       setState(() {
         _beachBeingMoved = null;
         _newBeachPosition = null;
         _isMovingBeach = false;
       });
 
-      // Reload beaches to show updated position
       await _loadBeachesForVisibleRegion();
 
-      // Show success message
       if (mounted) {
         showDialog(
           context: context,
@@ -403,10 +390,8 @@ class MapScreenState extends State<MapScreen> {
         );
       }
     } catch (e) {
-      // Close loading dialog
       if (mounted) Navigator.of(context).pop();
 
-      // Show error message
       if (mounted) {
         showDialog(
           context: context,
@@ -432,7 +417,6 @@ class MapScreenState extends State<MapScreen> {
       _isMovingBeach = false;
     });
 
-    // Show cancellation message using dialog
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -620,7 +604,6 @@ class MapScreenState extends State<MapScreen> {
               child: ListView(
                 shrinkWrap: true,
                 children: [
-                  // User-contributed metrics
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     child: Text(
@@ -642,7 +625,6 @@ class MapScreenState extends State<MapScreen> {
                     },
                   )),
 
-                  // Satellite metrics (only show if flag is true)
                   if (MapScreen._showSatelliteMetrics) ...[
                     const Divider(),
                     Padding(
@@ -739,7 +721,6 @@ class MapScreenState extends State<MapScreen> {
     if (shouldSignOut == true) {
       final authService = Provider.of<AuthService>(context, listen: false);
 
-      // Stop notification service if admin
       if (widget.isAdmin) {
         final notificationService = Provider.of<NotificationService>(context, listen: false);
         notificationService.stopListening(notifyChange: false);
@@ -815,73 +796,6 @@ class MapScreenState extends State<MapScreen> {
     );
   }
 
-  IconData _getMapStyleIcon(String style) {
-    switch (style) {
-      case 'satellite':
-        return Icons.satellite_alt;
-      case 'hybrid':
-        return Icons.layers;
-      case 'terrain':
-        return Icons.terrain;
-      case 'normal':
-      default:
-        return Icons.map;
-    }
-  }
-
-  Widget _buildNotificationBadge() {
-    return Consumer<NotificationService>(
-      builder: (context, notificationService, child) {
-        final count = notificationService.totalPendingCount;
-
-        return Stack(
-          children: [
-            FloatingActionButton.small(
-              heroTag: 'notificationButton',
-              backgroundColor: Colors.white,
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const ModerationScreen(),
-                  ),
-                );
-              },
-              tooltip: 'Moderation Queue',
-              child: const Icon(Icons.notifications, color: Colors.grey),
-            ),
-            if (count > 0)
-              Positioned(
-                right: 0,
-                top: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.red,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1.5),
-                  ),
-                  constraints: const BoxConstraints(
-                    minWidth: 20,
-                    minHeight: 20,
-                  ),
-                  child: Text(
-                    count > 99 ? '99+' : count.toString(),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 10,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final settingsService = Provider.of<SettingsService>(context);
@@ -903,7 +817,6 @@ class MapScreenState extends State<MapScreen> {
             }
 
             final beaches = snapshot.data ?? [];
-
             final markers = <Marker>{};
 
             if (_showMarkers && _activeMetricKey == null && !_isMovingBeach) {
@@ -922,7 +835,6 @@ class MapScreenState extends State<MapScreen> {
               }
             }
 
-            // Add the orange draggable marker when moving a beach
             if (_isMovingBeach && _newBeachPosition != null && _beachBeingMoved != null) {
               markers.add(
                 Marker(
@@ -976,7 +888,6 @@ class MapScreenState extends State<MapScreen> {
           },
         ),
 
-        // Moving beach controls overlay
         if (_isMovingBeach && _beachBeingMoved != null)
           Positioned(
             top: topPadding + 80,
@@ -1035,7 +946,6 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // Water body type selector
         if (_isMovingBeach && _beachBeingMoved != null)
           Positioned(
             bottom: 20,
@@ -1103,110 +1013,35 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // Floating action buttons at top-right
-        Positioned(
-          top: topPadding + 16,
-          right: 16,
-          child: Column(
-            children: [
-              FloatingActionButton.small(
-                heroTag: 'toggleMarkersButton',
-                backgroundColor: Colors.white,
-                onPressed: toggleMarkers,
-                tooltip: 'Toggle markers',
-                child: Icon(
-                  Icons.location_pin,
-                  color: _showMarkers ? seafoamGreen : Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              FloatingActionButton.small(
-                heroTag: 'heatmapLayerButton',
-                backgroundColor: Colors.white,
-                onPressed: () => _showLayerMenu(context),
-                tooltip: 'Heatmap layer',
-                child: Icon(
-                  Icons.layers,
-                  color: _activeMetricKey != null ? seafoamGreen : Colors.grey,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              FloatingActionButton.small(
-                heroTag: 'clearHeatmapButton',
-                backgroundColor: Colors.white,
-                onPressed: clearHeatmap,
-                tooltip: 'Clear heatmap',
-                child: const Icon(Icons.layers_clear, color: Colors.grey),
-              ),
-              const SizedBox(height: 8),
-
-              // Admin notification badge
-              if (widget.isAdmin) ...[
-                _buildNotificationBadge(),
-                const SizedBox(height: 8),
-              ],
-
-              FloatingActionButton.small(
-                heroTag: 'menuButton',
-                backgroundColor: Colors.white,
-                onPressed: () => _showMenuDialog(context),
-                tooltip: 'Menu',
-                child: const Icon(Icons.more_vert, color: Colors.grey),
-              ),
-            ],
-          ),
-        ),
-
-        // My location button (top-left)
-        Positioned(
-          top: topPadding + 16,
-          left: 16,
-          child: FloatingActionButton.small(
-            heroTag: 'myLocationButton',
-            backgroundColor: Colors.white,
-            onPressed: _centerOnMyLocation,
-            tooltip: 'Center on my location',
-            child: const Icon(Icons.my_location, color: Colors.grey),
-          ),
-        ),
-
-        // Map Style Switcher Button (under my location button)
-        Positioned(
-          top: topPadding + 72,
-          left: 16,
-          child: FloatingActionButton.small(
-            heroTag: 'mapStyleButton',
-            backgroundColor: Colors.white,
-            onPressed: () => _showQuickMapStylePicker(settingsService),
-            tooltip: 'Change Map Style',
-            child: Icon(
-              _getMapStyleIcon(settingsService.mapStyle),
-              color: seafoamGreen,
-            ),
-          ),
-        ),
-
-        // Add beach button (under map style button)
-        Positioned(
-          top: topPadding + 128,
-          left: 16,
-          child: FloatingActionButton.small(
-            heroTag: 'addBeachButton',
-            backgroundColor: Colors.white,
-            onPressed: () {
+        // Collapsible Menu
+        if (!_isMovingBeach)
+          MapMenu(
+            onAddBeach: () {
               Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AddBeachScreen())
+                context,
+                MaterialPageRoute(builder: (_) => const AddBeachScreen()),
               );
             },
-            tooltip: 'Add New Beach',
-            child: const Icon(Icons.add_location_alt, color: seafoamGreen),
+            onCenterLocation: _centerOnMyLocation,
+            onToggleMarkers: toggleMarkers,
+            onHeatmapLayer: () => _showLayerMenu(context),
+            onClearHeatmap: clearHeatmap,
+            onMapStyle: () => _showQuickMapStylePicker(settingsService),
+            onSettings: () => _showMenuDialog(context),
+            onModeration: widget.isAdmin
+                ? () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ModerationScreen(),
+                ),
+              );
+            }
+                : null,
+            showMarkers: _showMarkers,
+            hasActiveHeatmap: _activeMetricKey != null,
           ),
-        ),
 
-        // Legend
         if (_activeMetricKey != null)
           Positioned(
             left: 88,
@@ -1215,7 +1050,6 @@ class MapScreenState extends State<MapScreen> {
             child: _LegendBar(label: _activeMetricKey!),
           ),
 
-        // Selected beach info card
         if (_selectedBeach != null && !_isMovingBeach)
           Positioned(
             bottom: 100,
@@ -1286,7 +1120,6 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // "Search this area" button
         if (_showSearchAreaButton && !_isMovingBeach)
           Positioned(
             top: topPadding + 16,
