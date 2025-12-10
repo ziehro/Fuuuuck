@@ -14,6 +14,7 @@ import 'package:mybeachbook/main.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:mybeachbook/util/constants.dart';
+import 'package:mybeachbook/util/beach_icons.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
@@ -1045,6 +1046,7 @@ class BeachDetailScreen extends StatelessWidget {
   }) {
     final double visualMax = 1000.0;
     final double percentage = (value / visualMax).clamp(0.0, 1.0);
+    final ImageProvider? iconProvider = BeachIcons.getIcon(label);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -1055,10 +1057,30 @@ class BeachDetailScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-                Text('${value.toStringAsFixed(0)} $unit', style: const TextStyle(fontWeight: FontWeight.bold)),
+                if (iconProvider != null) ...[
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      image: DecorationImage(
+                        image: iconProvider,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                      Text('${value.toStringAsFixed(0)} $unit', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 8),
@@ -1197,6 +1219,8 @@ class BeachDetailScreen extends StatelessWidget {
   }
 
   Widget _buildDataRow(BuildContext context, String key, Widget value) {
+    final ImageProvider? iconProvider = BeachIcons.getIcon(key);
+
     return GestureDetector(
       onLongPress: () => _showInfoDialog(context, key),
       child: Card(
@@ -1207,7 +1231,27 @@ class BeachDetailScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Expanded(flex: 2, child: Text(key, style: const TextStyle(fontWeight: FontWeight.bold))),
+              if (iconProvider != null) ...[
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    image: DecorationImage(
+                      image: iconProvider,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                flex: 2,
+                child: Text(
+                  key,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
               Expanded(flex: 3, child: value),
             ],
           ),
@@ -1351,6 +1395,7 @@ class MetricScaleBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final double percentage = (max > min) ? ((value - min) / (max - min)).clamp(0.0, 1.0) : 0.0;
     final Color barColor = Color.lerp(Colors.blue, Colors.green, percentage) ?? Colors.grey;
+    final ImageProvider? iconProvider = BeachIcons.getIcon(label);
 
     return SizedBox(
       width: double.infinity,
@@ -1362,7 +1407,31 @@ class MetricScaleBar extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  if (iconProvider != null) ...[
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        image: DecorationImage(
+                          image: iconProvider,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
+                  Expanded(
+                    child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                  Text(
+                    value.toStringAsFixed(1),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
               const SizedBox(height: 8),
               Container(
                 height: 10,
