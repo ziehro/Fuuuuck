@@ -15,6 +15,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/services.dart';
 import 'package:mybeachbook/util/constants.dart';
 import 'package:mybeachbook/util/beach_icons.dart';
+import 'package:mybeachbook/services/moderation_service.dart';
 
 class BeachDetailScreen extends StatelessWidget {
   final String beachId;
@@ -186,6 +187,114 @@ class BeachDetailScreen extends StatelessWidget {
       const SnackBar(
         content: Text('Beach ID copied to clipboard'),
         duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+
+  void _showSuggestNameDialog(BuildContext context, String beachId, String currentName) {
+    final nameController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.edit, color: seafoamGreen),
+            SizedBox(width: 8),
+            Text('Suggest New Name'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Current Name:', style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(currentName),
+            const SizedBox(height: 16),
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Suggested Name',
+                hintText: 'Enter a better name for this beach',
+                border: OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your suggestion will be reviewed by admins before being applied.',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey[600],
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              final suggestedName = nameController.text.trim();
+              if (suggestedName.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a name')),
+                );
+                return;
+              }
+
+              if (suggestedName == currentName) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('New name is the same as current name')),
+                );
+                return;
+              }
+
+              Navigator.pop(dialogContext); // Close dialog first
+
+              try {
+                final user = FirebaseAuth.instance.currentUser;
+                if (user == null) {
+                  throw Exception('Must be signed in to suggest name changes');
+                }
+
+                final moderationService = ModerationService();
+                await moderationService.submitNameChangeSuggestion(
+                  beachId: beachId,
+                  currentName: currentName,
+                  suggestedName: suggestedName,
+                  userId: user.uid,
+                  userEmail: user.email ?? 'unknown',
+                );
+
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Name suggestion submitted for review!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error submitting suggestion: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            icon: const Icon(Icons.send),
+            label: const Text('Submit'),
+          ),
+        ],
       ),
     );
   }
@@ -596,11 +705,26 @@ class BeachDetailScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
                           Expanded(
-                            child: Text(
-                              beach.name,
-                              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  beach.name,
+                                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                // Add suggest name button
+                                TextButton.icon(
+                                  onPressed: () => _showSuggestNameDialog(context, beach.id, beach.name),
+                                  icon: const Icon(Icons.edit, size: 16),
+                                  label: const Text('Suggest better name'),
+                                  style: TextButton.styleFrom(
+                                    padding: EdgeInsets.zero,
+                                    minimumSize: const Size(0, 30),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                           Chip(

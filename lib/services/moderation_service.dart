@@ -103,19 +103,78 @@ class ModerationService {
     }
   }
 
+  /// Submit a name change suggestion
+  Future<void> submitNameChangeSuggestion({
+    required String beachId,
+    required String currentName,
+    required String suggestedName,
+    required String userId,
+    required String userEmail,
+  }) async {
+    try {
+      await _firestore.collection('pending_name_changes').add({
+        'beachId': beachId,
+        'currentName': currentName,
+        'suggestedName': suggestedName,
+        'userId': userId,
+        'userEmail': userEmail,
+        'submittedAt': Timestamp.now(),
+        'status': 'pending',
+      });
+      print('✅ Name change suggestion submitted');
+    } catch (e) {
+      print('❌ Error submitting name change: $e');
+      rethrow;
+    }
+  }
+
+  /// Approve a name change suggestion
+  Future<void> approveNameChange(String suggestionId, String beachId, String newName) async {
+    try {
+      final batch = _firestore.batch();
+
+      // Update the beach name
+      final beachRef = _firestore.collection('beaches').doc(beachId);
+      batch.update(beachRef, {'name': newName});
+
+      // Delete the suggestion
+      final suggestionRef = _firestore.collection('pending_name_changes').doc(suggestionId);
+      batch.delete(suggestionRef);
+
+      await batch.commit();
+      print('✅ Name change approved and applied: $newName');
+    } catch (e) {
+      print('❌ Error approving name change: $e');
+      rethrow;
+    }
+  }
+
+  /// Reject a name change suggestion
+  Future<void> rejectNameChange(String suggestionId) async {
+    try {
+      await _firestore.collection('pending_name_changes').doc(suggestionId).delete();
+      print('🗑️ Name change suggestion rejected: $suggestionId');
+    } catch (e) {
+      print('❌ Error rejecting name change: $e');
+      rethrow;
+    }
+  }
+
   /// Get count of pending items
   Future<Map<String, int>> getPendingCounts() async {
     try {
       final pendingBeachesCount = (await _firestore.collection('pending_beaches').get()).docs.length;
       final pendingContributionsCount = (await _firestore.collectionGroup('pending_contributions').get()).docs.length;
+      final pendingNameChangesCount = (await _firestore.collection('pending_name_changes').get()).docs.length;
 
       return {
         'beaches': pendingBeachesCount,
         'contributions': pendingContributionsCount,
+        'nameChanges': pendingNameChangesCount,
       };
     } catch (e) {
       print('Error getting pending counts: $e');
-      return {'beaches': 0, 'contributions': 0};
+      return {'beaches': 0, 'contributions': 0, 'nameChanges': 0};
     }
   }
 }

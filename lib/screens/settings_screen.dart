@@ -725,12 +725,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  // Add this to your existing lib/screens/settings_screen.dart
-// This replaces the _buildModerationSection() method
+// Replace the _buildModerationSection() method in settings_screen.dart with this:
 
   Widget _buildModerationSection() {
     // Only show for admin users
-    final adminUserIds = ['t8xTPHecHIRY8nWcvmQBzWouBIh1']; // Replace with your Firebase Auth UID
+    final adminUserIds = ['t8xTPHecHIRY8nWcvmQBzWouBIh1'];
     final currentUser = FirebaseAuth.instance.currentUser;
 
     if (currentUser == null || !adminUserIds.contains(currentUser.uid)) {
@@ -745,11 +744,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         Card(
           child: Column(
             children: [
-              // Use Consumer to get live updates
               Consumer<NotificationService>(
                 builder: (context, notificationService, child) {
                   final beachesCount = notificationService.pendingBeachesCount;
                   final contributionsCount = notificationService.pendingContributionsCount;
+                  final nameChangesCount = notificationService.pendingNameChangesCount;
                   final totalCount = notificationService.totalPendingCount;
 
                   return ListTile(
@@ -790,12 +789,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       'No pending items',
                       style: TextStyle(color: Colors.green),
                     )
-                        : Text(
-                      '$totalCount pending ($beachesCount beaches, $contributionsCount contributions)',
-                      style: const TextStyle(
-                        color: Colors.orange,
-                        fontWeight: FontWeight.bold,
-                      ),
+                        : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '$totalCount pending items:',
+                          style: const TextStyle(
+                            color: Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        if (beachesCount > 0)
+                          Text('• $beachesCount beach${beachesCount == 1 ? "" : "es"}'),
+                        if (contributionsCount > 0)
+                          Text('• $contributionsCount contribution${contributionsCount == 1 ? "" : "s"}'),
+                        if (nameChangesCount > 0)
+                          Text('• $nameChangesCount name change${nameChangesCount == 1 ? "" : "s"}'),
+                      ],
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
