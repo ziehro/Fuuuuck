@@ -1,5 +1,6 @@
 // lib/screens/map_screen.dart
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -22,7 +23,6 @@ import 'package:mybeachbook/screens/settings_screen.dart';
 import 'package:mybeachbook/screens/moderation_screen.dart';
 import 'package:mybeachbook/util/metric_ranges.dart';
 import 'package:mybeachbook/util/constants.dart';
-import 'package:mybeachbook/widgets/map_menu.dart';
 
 class MapScreen extends StatefulWidget {
   final bool isAdmin;
@@ -79,6 +79,7 @@ class MapScreenState extends State<MapScreen> {
 
   String? _activeMetricKey;
   bool _showMarkers = true;
+  bool _showMenu = false;
 
   final Set<Circle> _heatCircles = {};
   final Map<String, Beach> _circleToBeachMap = {};
@@ -281,7 +282,10 @@ class MapScreenState extends State<MapScreen> {
         _newBeachPosition = position;
       });
     } else {
-      setState(() => _selectedBeach = null);
+      setState(() {
+        _selectedBeach = null;
+        _showMenu = false;
+      });
     }
   }
 
@@ -1013,33 +1017,458 @@ class MapScreenState extends State<MapScreen> {
             ),
           ),
 
-        // Collapsible Menu
+        // Menu button (top right, beside search button)
         if (!_isMovingBeach)
-          MapMenu(
-            onAddBeach: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddBeachScreen()),
-              );
-            },
-            onCenterLocation: _centerOnMyLocation,
-            onToggleMarkers: toggleMarkers,
-            onHeatmapLayer: () => _showLayerMenu(context),
-            onClearHeatmap: clearHeatmap,
-            onMapStyle: () => _showQuickMapStylePicker(settingsService),
-            onSettings: () => _showMenuDialog(context),
-            onModeration: widget.isAdmin
-                ? () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ModerationScreen(),
+          Positioned(
+            top: topPadding + 16,
+            right: 16,
+            child: Material(
+              elevation: 4,
+              shape: const CircleBorder(),
+              color: Colors.white,
+              child: IconButton(
+                onPressed: () {
+                  setState(() {
+                    _showMenu = !_showMenu;
+                  });
+                },
+                icon: Icon(
+                  _showMenu ? Icons.close : Icons.menu,
+                  color: oceanBlue,
                 ),
-              );
-            }
-                : null,
-            showMarkers: _showMarkers,
-            hasActiveHeatmap: _activeMetricKey != null,
+                tooltip: 'Menu',
+                padding: const EdgeInsets.all(12),
+              ),
+            ),
+          ),
+
+        // Glass menu items (open below search button)
+        if (_showMenu && !_isMovingBeach)
+          Positioned(
+            top: topPadding + 68, // Below search button
+            left: 16,
+            right: 16,
+            child: Column(
+              children: [
+                // Add Beach
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() => _showMenu = false);
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (_) => const AddBeachScreen()),
+                            );
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.add_location, color: oceanBlue),
+                                SizedBox(width: 12),
+                                Text('Add Beach', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Center on Me
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() => _showMenu = false);
+                            _centerOnMyLocation();
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.my_location, color: oceanBlue),
+                                SizedBox(width: 12),
+                                Text('Center on Me', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Toggle Markers
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: toggleMarkers,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _showMarkers ? Icons.visibility : Icons.visibility_off,
+                                  color: oceanBlue,
+                                ),
+                                const SizedBox(width: 12),
+                                Text(
+                                  _showMarkers ? 'Hide Markers' : 'Show Markers',
+                                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Heatmap Layer
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() => _showMenu = false);
+                            _showLayerMenu(context);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.layers, color: seafoamGreen),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Text('Heatmap Layer', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                      if (_activeMetricKey != null)
+                                        Text(
+                                          _activeMetricKey!,
+                                          style: const TextStyle(fontSize: 12, color: Colors.grey),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                const Icon(Icons.chevron_right, color: Colors.grey),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Clear Heatmap (only show if active)
+                if (_activeMetricKey != null)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() => _showMenu = false);
+                              clearHeatmap();
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: const [
+                                  Icon(Icons.clear_all, color: Colors.white),
+                                  SizedBox(width: 12),
+                                  Text('Clear Heatmap', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Map Style
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() => _showMenu = false);
+                            _showQuickMapStylePicker(settingsService);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.map, color: oceanBlue),
+                                SizedBox(width: 12),
+                                Text('Map Style', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                Spacer(),
+                                Icon(Icons.chevron_right, color: Colors.grey),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Moderation (admin only)
+                if (widget.isAdmin)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.75),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.3),
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: () {
+                              setState(() => _showMenu = false);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => const ModerationScreen(),
+                                ),
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(12),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.admin_panel_settings, color: Colors.orange),
+                                  const SizedBox(width: 12),
+                                  const Text('Moderation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                  const Spacer(),
+                                  Consumer<NotificationService>(
+                                    builder: (context, notificationService, child) {
+                                      final count = notificationService.totalPendingCount;
+                                      if (count == 0) return const SizedBox.shrink();
+                                      return Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: Colors.red,
+                                          borderRadius: BorderRadius.circular(12),
+                                        ),
+                                        child: Text(
+                                          count.toString(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                // Settings
+                Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: () {
+                            setState(() => _showMenu = false);
+                            _showMenuDialog(context);
+                          },
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                            child: Row(
+                              children: const [
+                                Icon(Icons.settings, color: oceanBlue),
+                                SizedBox(width: 12),
+                                Text('Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
         if (_activeMetricKey != null)
@@ -1123,17 +1552,15 @@ class MapScreenState extends State<MapScreen> {
         if (_showSearchAreaButton && !_isMovingBeach)
           Positioned(
             top: topPadding + 16,
-            left: 80,
-            right: 80,
-            child: Center(
-              child: ElevatedButton.icon(
-                icon: const Icon(Icons.search),
-                label: Text('Search this area${_activeMetricKey != null ? ' • ${_activeMetricKey!}' : ''}'),
-                onPressed: _loadBeachesForVisibleRegion,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
-                ),
+            left: 16,
+            right: 72, // Leave room for menu button
+            child: ElevatedButton.icon(
+              icon: const Icon(Icons.search),
+              label: Text('Search this area${_activeMetricKey != null ? ' • ${_activeMetricKey!}' : ''}'),
+              onPressed: _loadBeachesForVisibleRegion,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).primaryColor,
+                foregroundColor: Theme.of(context).appBarTheme.foregroundColor,
               ),
             ),
           ),
